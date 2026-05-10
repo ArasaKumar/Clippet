@@ -283,6 +283,9 @@
             </li>
           </ul>
           <div class="mock-footer" aria-hidden="true">
+            <button class="mock-foot-btn mock-foot-theme" tabindex="-1" title="Toggle theme">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+            </button>
             <button class="mock-foot-btn mock-foot-trash" tabindex="-1" title="Clear History">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
             </button>
@@ -462,6 +465,127 @@
         <div class="format"><span class="format-tag tag-html">[H]</span><div><strong>HTML</strong><span>Full CF_HTML fragment with source URL</span></div></div>
         <div class="format"><span class="format-tag tag-sheet">[X]</span><div><strong>Spreadsheet</strong><span>Excel / Sheets cells with structure intact</span></div></div>
         <div class="format"><span class="format-tag tag-code">[C]</span><div><strong>Code</strong><span>Auto-tagged with a language hint from the foreground IDE</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== FOOTER TOUR ============================ -->
+  <section class="footer-tour">
+    <div class="container">
+      <h2 class="section-title">Five icons, one click each</h2>
+      <p class="section-lede">
+        A compact strip at the bottom of the popup puts the actions you reach for most one click
+        away. Destructive items wear red, informational ones blue, neutral ones gray — so you can
+        target the right button without reading the tooltip. The strip stays in sync with the
+        Win11 system theme, but you can override it from the leftmost button.
+      </p>
+
+      <div class="ft-panels">
+
+        <!-- =================== DARK PANEL =================== -->
+        <figure class="ft-panel ft-panel-dark" aria-label="Footer icons in dark theme">
+          <figcaption class="ft-mode">
+            <span class="ft-mode-dot ft-mode-dot-dark" aria-hidden="true"></span>
+            Dark theme
+          </figcaption>
+
+          <div class="ft-callouts">
+            <div class="ft-callout ft-cc-1">
+              <strong>Toggle theme</strong>
+              <span>Flip between dark and light. Choice is remembered in <code>settings.json</code>.</span>
+            </div>
+            <div class="ft-callout ft-cc-2">
+              <strong>Clear history</strong>
+              <span>Wipe the unpinned entries. Pinned items survive — by design.</span>
+            </div>
+            <div class="ft-callout ft-cc-3">
+              <strong>Settings</strong>
+              <span>Autostart on login, popup size, theme override.</span>
+            </div>
+            <div class="ft-callout ft-cc-4">
+              <strong>About</strong>
+              <span>Version, source link, and the public-domain license.</span>
+            </div>
+            <div class="ft-callout ft-cc-5">
+              <strong>Quit</strong>
+              <span>Exit Clippet — unregisters the global hotkey on the way out.</span>
+            </div>
+          </div>
+
+          <div class="ft-stage" aria-hidden="true">
+            <div class="ft-list-fade"></div>
+            <div class="ft-bar">
+              <button class="ft-btn ft-btn-theme" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-trash" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-cog" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-info" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-power" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg>
+              </button>
+            </div>
+          </div>
+        </figure>
+
+        <!-- =================== LIGHT PANEL =================== -->
+        <figure class="ft-panel ft-panel-light" aria-label="Footer icons in light theme">
+          <figcaption class="ft-mode">
+            <span class="ft-mode-dot ft-mode-dot-light" aria-hidden="true"></span>
+            Light theme
+          </figcaption>
+
+          <div class="ft-callouts">
+            <div class="ft-callout ft-cc-1">
+              <strong>Toggle theme</strong>
+              <span>Flip between dark and light. Choice is remembered in <code>settings.json</code>.</span>
+            </div>
+            <div class="ft-callout ft-cc-2">
+              <strong>Clear history</strong>
+              <span>Wipe the unpinned entries. Pinned items survive — by design.</span>
+            </div>
+            <div class="ft-callout ft-cc-3">
+              <strong>Settings</strong>
+              <span>Autostart on login, popup size, theme override.</span>
+            </div>
+            <div class="ft-callout ft-cc-4">
+              <strong>About</strong>
+              <span>Version, source link, and the public-domain license.</span>
+            </div>
+            <div class="ft-callout ft-cc-5">
+              <strong>Quit</strong>
+              <span>Exit Clippet — unregisters the global hotkey on the way out.</span>
+            </div>
+          </div>
+
+          <div class="ft-stage" aria-hidden="true">
+            <div class="ft-list-fade"></div>
+            <div class="ft-bar">
+              <button class="ft-btn ft-btn-theme" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-trash" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-cog" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-info" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+              </button>
+              <button class="ft-btn ft-btn-power" tabindex="-1">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"/><path d="M12 2v10"/></svg>
+              </button>
+            </div>
+          </div>
+        </figure>
+
       </div>
     </div>
   </section>

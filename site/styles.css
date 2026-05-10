@@ -411,6 +411,7 @@ h1 {
   color: var(--mock-search-text);
 }
 .mock-foot-btn:hover { background: var(--mock-row-selected); }
+.mock-foot-theme { color: #facc15; } /* gold — primary, non-destructive */
 .mock-foot-trash { color: #f87171; } /* red — destructive */
 .mock-foot-cog   { color: var(--mock-search-text); }
 .mock-foot-info  { color: #60a5fa; } /* blue — informational */
@@ -775,6 +776,178 @@ section { padding: 90px 0; }
   color: var(--muted);
 }
 .muted { color: var(--muted); margin: 6px 0 0; font-size: 13.5px; }
+
+/* =================== FOOTER TOUR ===================
+   Annotated diagram of the in-app footer. Two side-by-side panels
+   (dark + light) so visitors see how the strip looks regardless of
+   their own system theme. Each panel locks its own colors in via
+   local custom properties so the whole tour stays themed correctly
+   even if the page's data-theme flips at runtime. The five callouts
+   above the icon strip share a single 5-column grid with the strip
+   below them, which keeps the dotted connector lines aligned with
+   the icons no matter the viewport width. Real app uses these exact
+   accent hex values (see src/state.rs PAL_DARK / PAL_LIGHT). */
+
+.footer-tour { padding-top: 30px; padding-bottom: 60px; }
+
+.ft-panels {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  align-items: stretch;
+}
+@media (max-width: 920px) { .ft-panels { grid-template-columns: 1fr; } }
+
+.ft-panel {
+  /* Per-panel theme tokens — overridden by .ft-panel-light below. */
+  --ft-bg: linear-gradient(180deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.95));
+  --ft-text: #e5e7eb;
+  --ft-muted: #94a3b8;
+  --ft-border: rgba(255, 255, 255, 0.10);
+  --ft-line: rgba(148, 163, 184, 0.45);
+  --ft-row-fade: linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0.04));
+  --ft-icon-theme: #facc15;  /* dark gold */
+  --ft-icon-trash: #fca5a5;
+  --ft-icon-cog:   #a0a0a0;
+  --ft-icon-info:  #93c5fd;
+  --ft-icon-power: #fcd34d;
+
+  margin: 0;
+  padding: 22px 20px 18px;
+  background: var(--ft-bg);
+  border: 1px solid var(--ft-border);
+  border-radius: var(--radius);
+  color: var(--ft-text);
+  box-shadow: var(--shadow-soft);
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.ft-panel-light {
+  --ft-bg: linear-gradient(180deg, #ffffff, #f4f6fb);
+  --ft-text: #0f172a;
+  --ft-muted: #475569;
+  --ft-border: rgba(15, 23, 42, 0.10);
+  --ft-line: rgba(71, 85, 105, 0.45);
+  --ft-row-fade: linear-gradient(180deg, rgba(15, 23, 42, 0.02), rgba(15, 23, 42, 0.04));
+  --ft-icon-theme: #caa10d;
+  --ft-icon-trash: #dc2626;
+  --ft-icon-cog:   #606060;
+  --ft-icon-info:  #2563eb;
+  --ft-icon-power: #ca8a04;
+}
+
+.ft-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ft-muted);
+}
+.ft-mode-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1px solid var(--ft-border);
+}
+.ft-mode-dot-dark  { background: #0b1130; }
+.ft-mode-dot-light { background: #f7f8fc; }
+
+/* Callouts row — 5 columns, one per icon. Each has a downward dotted
+   line whose horizontal position is a percentage tied to the column's
+   midpoint, so the line points at the icon below regardless of how
+   wide the panel becomes. Using a 5-col grid keeps them aligned. */
+.ft-callouts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.ft-callout {
+  position: relative;
+  text-align: center;
+  padding: 0 4px 26px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ft-muted);
+}
+.ft-callout strong {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ft-text);
+  font-weight: 600;
+  margin-bottom: 2px;
+  letter-spacing: -0.005em;
+}
+.ft-callout span { display: block; }
+.ft-callout code {
+  font-size: 10.5px;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(127, 127, 127, 0.12);
+}
+.ft-callout::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0;
+  width: 0;
+  height: 18px;
+  border-left: 1.5px dotted var(--ft-line);
+}
+
+/* Stage = the chunk of "popup" we're zooming in on. A 1px separator
+   above the bar suggests the listbox above it; the icon row is
+   right-aligned to match the real app's layout. */
+.ft-stage {
+  border-top: 1px solid var(--ft-border);
+  padding-top: 10px;
+  background: var(--ft-row-fade);
+  border-radius: 8px;
+}
+
+.ft-list-fade {
+  height: 6px;
+}
+
+.ft-bar {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  padding: 6px 6px 8px;
+  border-top: 1px solid var(--ft-border);
+}
+
+.ft-btn {
+  height: 30px;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: default;
+  color: var(--ft-muted);
+  padding: 0;
+}
+.ft-btn:hover { background: rgba(127, 127, 127, 0.10); }
+.ft-btn svg { width: 16px; height: 16px; }
+
+.ft-btn-theme { color: var(--ft-icon-theme); }
+.ft-btn-trash { color: var(--ft-icon-trash); }
+.ft-btn-cog   { color: var(--ft-icon-cog); }
+.ft-btn-info  { color: var(--ft-icon-info); }
+.ft-btn-power { color: var(--ft-icon-power); }
+
+@media (max-width: 600px) {
+  .ft-callout { font-size: 11px; padding-bottom: 22px; }
+  .ft-callout strong { font-size: 11.5px; }
+  .ft-callout::after { height: 14px; }
+  .ft-panel { padding: 18px 14px 14px; }
+}
 
 /* =================== THEME TOGGLE =================== */
 
