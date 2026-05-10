@@ -173,4 +173,15 @@ pub(crate) unsafe fn apply_popup_style(hwnd: HWND, is_dark: bool) {
         &dark as *const _ as *const _,
         std::mem::size_of::<BOOL>() as u32,
     );
+    // Win11 paints a 1-px accent border around every top-level window with
+    // WS_THICKFRAME, on top of DWM's rounded-corner clip. That shows up as
+    // a thin white line wrapping the popup. DWMWA_COLOR_NONE removes it
+    // entirely so the only chrome is the rounded corner + acrylic shadow.
+    let border: u32 = DWMWA_COLOR_NONE;
+    let _ = DwmSetWindowAttribute(
+        hwnd,
+        DWMWA_BORDER_COLOR,
+        &border as *const _ as *const _,
+        std::mem::size_of::<u32>() as u32,
+    );
 }

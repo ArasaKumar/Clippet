@@ -81,14 +81,14 @@ pub(crate) const SEARCH_HEIGHT: i32 = 40;
 // Geometry of the parent-painted search-box chrome (rounded surface +
 // magnifying-glass icon). All values are inside the search wrapper rect,
 // which itself sits at SEARCH_INSET from each side of the popup.
-pub(crate) const SEARCH_INSET: i32 = 10;
+pub(crate) const SEARCH_INSET: i32 = 12;
 pub(crate) const SEARCH_TOP_GAP: i32 = 6;
 pub(crate) const SEARCH_BOTTOM_GAP: i32 = 8;
-pub(crate) const SEARCH_RADIUS: i32 = 12;
+pub(crate) const SEARCH_RADIUS: i32 = 8;
 pub(crate) const SEARCH_ICON_LEFT_PAD: i32 = 14;
 pub(crate) const SEARCH_ICON_SIZE: i32 = 14;
 pub(crate) const SEARCH_ICON_RIGHT_GAP: i32 = 8;
-pub(crate) const SEARCH_EDIT_VERT_INSET: i32 = 9;
+pub(crate) const SEARCH_EDIT_VERT_INSET: i32 = 6;
 pub(crate) const SEARCH_EDIT_RIGHT_PAD: i32 = 14;
 // DRAWITEMSTRUCT.itemState bits (DRAWITEMSTRUCT_FLAGS values).
 pub(crate) const ODS_SELECTED_BIT: u32 = 0x0001;
@@ -179,7 +179,7 @@ pub(crate) const DARK_PALETTE: Palette = Palette {
     subtext: 0x00A0A0A0,
     accent: 0x0015CCFA,
     pin_dim: 0x00606060,
-    search_bg: 0x002A2A2A,
+    search_bg: 0x00333333,
     tag_text:  0x00E1D5CB, // #CBD5E1
     tag_rich:  0x00A5A5FC, // #FCA5A5
     tag_image: 0x00ACEF86, // #86EFAC
