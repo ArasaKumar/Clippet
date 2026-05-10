@@ -19,9 +19,41 @@ cargo check                     # type-check without linking
 .\target\release\clippet.exe    # run
 ```
 
+**Iteration one-liner** — kill any running instance (Windows holds the .exe open and the link step would fail), rebuild release, run only if the build succeeded:
+
+```powershell
+Stop-Process -Name clippet -Force -ErrorAction SilentlyContinue; cargo build --release; if ($?) { .\target\release\clippet.exe }
+```
+
 There are no tests in the tree — `cargo test` is a no-op. The release profile is tuned for size (`opt-level = "z"`, LTO, `panic = "abort"`, strip).
 
+CI (see *Release pipeline* below) builds with `cargo build --release --locked --target x86_64-pc-windows-msvc`. The `--locked` flag means **`Cargo.lock` must be committed and in sync** — bump it (e.g. `cargo check`) in the same commit that bumps `Cargo.toml` so the release job doesn't fail.
+
 `build.rs` procedurally rasterizes `assets/clippet.svg` into a multi-resolution `.ico` and embeds it as the `clippet` Win32 resource (matched at runtime by `LoadIconW(hinst, w!("clippet"))`). If you change the SVG, mirror the coordinate change in `build.rs::render_icon` — we don't parse the SVG to keep build deps lean.
+
+## Release & contribution workflow
+
+**Branch naming.** `<type>/<kebab-slug>` off `main`. Used types so far: `feature/…` (new functionality, e.g. `feature/compact-footer-icons`) and `fix/…` (bug fix, e.g. `fix/preserve-pinned-on-clear`). Don't work on `main`; PR every change.
+
+**Commit messages.** Plain sentence-case subjects, no Conventional-Commit prefixes (`feat:` / `fix:` etc are *not* used here). Subject ≤ ~70 chars, imperative mood, capitalised. Examples in history: `Bump version to 0.1.1`, `Fix listbox scroll stutter + clippy cleanup`. Squash-merging a PR appends `(#N)` automatically — don't add it by hand. Body (when needed) explains *why*; reference invariants from the *Architecture* section if you're touching them.
+
+**Versioning + tags.** Semantic versioning, tagged as `vMAJOR.MINOR.PATCH` (annotated tags, e.g. `v0.1.2`). The flow:
+
+1. In the change PR, bump `Cargo.toml` `version` and refresh `Cargo.lock` (run `cargo check`). Either fold into the feature commit or use a dedicated `Bump version to X.Y.Z` commit — both patterns exist in history.
+2. Merge the PR (squash-merge is the default — the merge commit on `main` is what gets tagged).
+3. From a fast-forwarded `main`, tag the merge commit and push:
+
+```powershell
+git checkout main; git pull --ff-only
+git tag -a v0.1.2 <merge-sha> -m "v0.1.2 - <one-line summary>"
+git push origin v0.1.2
+```
+
+Pushing the tag triggers the *Release* workflow (below); the GitHub Release is created automatically. **Never tag a feature-branch HEAD before merge** — squash-merge would orphan it from `main`'s history.
+
+**Release pipeline** ([.github/workflows/release.yml](.github/workflows/release.yml)). Fires on push of any `v*` tag (or manual `workflow_dispatch` against an existing tag). On `windows-latest` it builds `clippet.exe` for `x86_64-pc-windows-msvc` with `--locked`, computes the SHA-256 into `clippet.exe.sha256`, and creates a GitHub Release with both files attached and auto-generated changelog notes (`generate_release_notes: true`). `fail_on_unmatched_files: true` means a missing artifact fails the run — don't rename the binary without updating the workflow.
+
+**Pages pipeline** ([.github/workflows/pages.yml](.github/workflows/pages.yml)). Auto-deploys `site/` to GitHub Pages on every push to `main` that touches `site/**` or the workflow itself. The repo intentionally keeps `site/` (landing page) separate from `docs/` (per-level design notes) so doc edits don't trigger redeploys.
 
 ## Architecture
 
