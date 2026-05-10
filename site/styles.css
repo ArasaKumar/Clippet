@@ -387,6 +387,35 @@ h1 {
 .mock-pin { font-size: 13px; color: #475569; }
 .mock-pin.pinned { color: #facc15; }
 
+/* Bottom footer bar — compact icon row of quick actions, mirrors the
+   in-app footer (clear / settings / about / quit) with a per-action
+   accent color and a thin separator above. */
+.mock-footer {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0;
+  padding: 4px 6px;
+  border-top: 1px solid var(--mock-search-border);
+}
+.mock-foot-btn {
+  width: 36px;
+  height: 30px;
+  border: 0;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  cursor: default;
+  color: var(--mock-search-text);
+}
+.mock-foot-btn:hover { background: var(--mock-row-selected); }
+.mock-foot-trash { color: #f87171; } /* red — destructive */
+.mock-foot-cog   { color: var(--mock-search-text); }
+.mock-foot-info  { color: #60a5fa; } /* blue — informational */
+.mock-foot-power { color: #f59e0b; } /* amber — caution */
+
 .mock-keys {
   position: absolute;
   bottom: -22px;
