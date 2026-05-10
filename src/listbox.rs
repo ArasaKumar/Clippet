@@ -15,7 +15,7 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::clipboard::{looks_like_png, png_to_dib};
 use crate::paste::{activate_selected, set_clipboard_from_item};
-use crate::search::{drawable_line, refresh_listbox, row_to_hist};
+use crate::search::{refresh_listbox, row_to_hist};
 use crate::state::{
     BG_BRUSH, BOLD_FONT, EDIT_ID, ES_AUTOHSCROLL_BIT, ES_LEFT_BIT, FILTERED, HISTORY, IDM_ROW_COPY,
     IDM_ROW_DELETE, IDM_ROW_PASTE, IDM_ROW_PIN,
@@ -25,7 +25,7 @@ use crate::state::{
     PIN_GLYPH_UNPINNED, SEARCH, SEARCH_HEIGHT, SELF_HWND, SEL_BRUSH, TEXT_ITEM_HEIGHT,
 };
 use crate::tray::update_tray_tooltip;
-use crate::util::to_wide;
+use crate::util::{relative_time, to_wide};
 
 // =====================================================================
 // Control creation.
@@ -128,34 +128,52 @@ pub(crate) unsafe fn make_bold_font_from(owner: HWND) -> HFONT {
 // Owner-draw rendering with fuzzy-match highlights.
 // =====================================================================
 
-/// SAFETY: GetTextExtentPoint32W reads the wide buffer for `wide.len()`
-/// chars; the buffer outlives the call.
+thread_local! {
+    /// Reusable UTF-16 buffer for the per-paint text helpers below.
+    /// Owner-draw fires once per visible row per scroll tick; allocating
+    /// a fresh `Vec<u16>` per `measure_text` / `text_out` call was
+    /// visible as scroll stutter.
+    static WIDE_SCRATCH: RefCell<Vec<u16>> = RefCell::new(Vec::with_capacity(256));
+}
+
+/// SAFETY: GetTextExtentPoint32W reads the wide buffer for its full
+/// length; the buffer outlives the call (the `with` borrow scope wraps
+/// it).
 unsafe fn measure_text(hdc: HDC, text: &str) -> i32 {
     if text.is_empty() {
         return 0;
     }
-    let wide: Vec<u16> = text.encode_utf16().collect();
-    let mut size = SIZE::default();
-    let _ = GetTextExtentPoint32W(hdc, &wide, &mut size);
-    size.cx
+    WIDE_SCRATCH.with(|s| {
+        let mut buf = s.borrow_mut();
+        buf.clear();
+        buf.extend(text.encode_utf16());
+        let mut size = SIZE::default();
+        let _ = GetTextExtentPoint32W(hdc, &buf, &mut size);
+        size.cx
+    })
 }
 
-/// SAFETY: ExtTextOutW reads the wide buffer for `wide.len()` chars.
+/// SAFETY: ExtTextOutW reads the wide buffer for `buf.len()` chars; the
+/// buffer outlives the call (the `with` borrow scope wraps it).
 unsafe fn text_out(hdc: HDC, x: i32, y: i32, text: &str) {
     if text.is_empty() {
         return;
     }
-    let wide: Vec<u16> = text.encode_utf16().collect();
-    let _ = ExtTextOutW(
-        hdc,
-        x,
-        y,
-        ETO_OPTIONS::default(),
-        None,
-        PCWSTR(wide.as_ptr()),
-        wide.len() as u32,
-        None,
-    );
+    WIDE_SCRATCH.with(|s| {
+        let mut buf = s.borrow_mut();
+        buf.clear();
+        buf.extend(text.encode_utf16());
+        let _ = ExtTextOutW(
+            hdc,
+            x,
+            y,
+            ETO_OPTIONS::default(),
+            None,
+            PCWSTR(buf.as_ptr()),
+            buf.len() as u32,
+            None,
+        );
+    });
 }
 
 /// SAFETY: same as `text_out`; clip rect is read by-pointer for the
@@ -164,17 +182,21 @@ unsafe fn text_out_clipped(hdc: HDC, x: i32, y: i32, text: &str, clip: &RECT) {
     if text.is_empty() {
         return;
     }
-    let wide: Vec<u16> = text.encode_utf16().collect();
-    let _ = ExtTextOutW(
-        hdc,
-        x,
-        y,
-        ETO_CLIPPED,
-        Some(clip as *const _),
-        PCWSTR(wide.as_ptr()),
-        wide.len() as u32,
-        None,
-    );
+    WIDE_SCRATCH.with(|s| {
+        let mut buf = s.borrow_mut();
+        buf.clear();
+        buf.extend(text.encode_utf16());
+        let _ = ExtTextOutW(
+            hdc,
+            x,
+            y,
+            ETO_CLIPPED,
+            Some(clip as *const _),
+            PCWSTR(buf.as_ptr()),
+            buf.len() as u32,
+            None,
+        );
+    });
 }
 
 // =====================================================================
@@ -466,6 +488,36 @@ unsafe fn draw_image_thumbnail(hdc: HDC, id: u64, raw: &[u8], x: i32, y: i32, si
     let _ = DeleteDC(mem_dc);
 }
 
+/// Per-paint GDI context shared across every run emitted for one row.
+/// Built once before the run-walk loop; passed by reference to keep
+/// `emit_preview_run`'s signature small.
+struct PreviewRunCtx {
+    hdc: HDC,
+    text_y: i32,
+    bold: HFONT,
+    regular: HFONT,
+    clip: RECT,
+}
+
+/// Render one matched/unmatched run of the preview at `*x`, advancing
+/// `*x` past the rendered width.
+///
+/// SAFETY: ctx.hdc is the WM_DRAWITEM DC; bold/regular are session-lived
+/// HFONTs; ctx.clip lives for the row paint.
+unsafe fn emit_preview_run(ctx: &PreviewRunCtx, x: &mut i32, run: &str, is_match: bool) {
+    if run.is_empty() {
+        return;
+    }
+    let font = if is_match && !ctx.bold.0.is_null() {
+        ctx.bold
+    } else {
+        ctx.regular
+    };
+    let _ = SelectObject(ctx.hdc, font);
+    text_out_clipped(ctx.hdc, *x, ctx.text_y, run, &ctx.clip);
+    *x += measure_text(ctx.hdc, run);
+}
+
 /// SAFETY: dis is supplied by the WM_DRAWITEM message and outlives this
 /// call; all GDI handles read from thread-locals are valid for the
 /// session.
@@ -490,136 +542,184 @@ pub(crate) unsafe fn draw_listbox_item(dis: &DRAWITEMSTRUCT) {
     }
     SetBkMode(dis.hDC, TRANSPARENT);
 
-    let row = FILTERED.with(|f| f.borrow().get(row_idx).cloned());
-    let Some(row) = row else { return };
-    let item = HISTORY.with(|h| h.borrow().get(row.hist_index).cloned());
-    let Some(item) = item else { return };
+    // Hold both borrows immutably across the paint body. Cloning ClipItem
+    // per WM_DRAWITEM was multi-MB memcpy on image rows (raw: Vec<u8>),
+    // which surfaced as scroll stutter. Paint is a leaf — neither
+    // FILTERED nor HISTORY is mutated below this line, and the only
+    // nested thread-local touched (THUMB_CACHE) is independent.
+    FILTERED.with(|f| {
+        let filtered = f.borrow();
+        let Some(row) = filtered.get(row_idx) else { return };
+        HISTORY.with(|h| {
+            let hist = h.borrow();
+            let Some(item) = hist.get(row.hist_index) else { return };
 
-    let mut drw = drawable_line(&item);
-    // Image rows already convey the type via the [I] tag and the
-    // thumbnail itself; the "[Image WxH]" caption next to them is just
-    // visual noise, so drop it from owner-draw (the LB_HASSTRINGS shadow
-    // copy used by screen readers / IME still includes it).
-    if item.kind == ItemType::Image {
-        drw.preview.clear();
-    }
-    let pad: i32 = 12;
-    let col_gap: i32 = 10;
-    // Vertically center the text in the row using the selected font's metrics.
-    let mut tm = TEXTMETRICW::default();
-    let _ = GetTextMetricsW(dis.hDC, &mut tm);
-    let row_h = dis.rcItem.bottom - dis.rcItem.top;
-
-    let regular =
-        HFONT(SendMessageW(dis.hwndItem, WM_GETFONT, WPARAM(0), LPARAM(0)).0 as *mut _);
-    let bold = BOLD_FONT.with(|c| c.get());
-    let _ = SelectObject(dis.hDC, regular);
-
-    let text_y = dis.rcItem.top + (row_h - tm.tmHeight) / 2;
-
-    // Layout: [pad] tag [gap] (thumb [gap])? preview [gap] time [pin column].
-    // Measure tag + time up front so the preview's clip rect is known
-    // before drawing anything.
-    let tag_x = dis.rcItem.left + pad;
-    let tag_w = measure_text(dis.hDC, &drw.prefix);
-    let pin_left = dis.rcItem.right - PIN_AREA_W;
-    let time_w = measure_text(dis.hDC, &drw.suffix);
-    let has_thumbnail = item.kind == ItemType::Image;
-    // Image rows are TEXT_ITEM_HEIGHT * 3 tall (see measure_listbox_item);
-    // size the thumbnail at 2/3 of that so it fills the row with padding.
-    let thumb_size = (TEXT_ITEM_HEIGHT * 2) as i32;
-    let thumb_left = tag_x + tag_w + col_gap;
-    let preview_left = if has_thumbnail {
-        thumb_left + thumb_size + col_gap
-    } else {
-        tag_x + tag_w + col_gap
-    };
-    let time_x = (pin_left - col_gap - time_w).max(preview_left);
-    let preview_right = (time_x - col_gap).max(preview_left);
-    let preview_clip = RECT {
-        left: preview_left,
-        top: dis.rcItem.top,
-        right: preview_right,
-        bottom: dis.rcItem.bottom,
-    };
-
-    // Tag chip — colored per format. Selection keeps the type color so
-    // the chip's visual signal survives the selection brush.
-    SetTextColor(dis.hDC, COLORREF(item.kind.tag_color(&pal)));
-    text_out(dis.hDC, tag_x, text_y, &drw.prefix);
-
-    if has_thumbnail {
-        let thumb_y = dis.rcItem.top + (row_h - thumb_size) / 2;
-        draw_image_thumbnail(dis.hDC, item.id, &item.raw, thumb_left, thumb_y, thumb_size);
-    }
-
-    // Preview in primary text color, with bold runs for fuzzy-match
-    // highlights. Clipped to the middle column so a long preview can't
-    // bleed under the time / pin columns.
-    SetTextColor(dis.hDC, COLORREF(pal.text));
-    let mut x = preview_left;
-    if row.indices.is_empty() {
-        text_out_clipped(dis.hDC, x, text_y, &drw.preview, &preview_clip);
-    } else {
-        // Split the preview into runs of consecutive matched/unmatched
-        // chars (char_indices keeps multi-byte chars aligned with the
-        // byte-index set returned by fuzzy_indices).
-        let idx_set: std::collections::HashSet<usize> =
-            row.indices.iter().copied().collect();
-        let mut current_match = false;
-        let mut current_str = String::new();
-        let mut runs: Vec<(bool, String)> = Vec::new();
-        for (byte_i, ch) in drw.preview.char_indices() {
-            let is_match = idx_set.contains(&byte_i);
-            if !current_str.is_empty() && is_match != current_match {
-                runs.push((current_match, std::mem::take(&mut current_str)));
-            }
-            current_match = is_match;
-            current_str.push(ch);
-        }
-        if !current_str.is_empty() {
-            runs.push((current_match, current_str));
-        }
-        for (is_match, run) in runs {
-            let font = if is_match && !bold.0.is_null() {
-                bold
-            } else {
-                regular
+            // Build the prefix tag and borrow the preview as `&str`
+            // directly from the held HISTORY borrow. Image rows still
+            // suppress the preview (the [I] tag + thumbnail already
+            // convey the type).
+            let prefix_owned: Option<String> = match (&item.kind, item.lang.as_deref()) {
+                (ItemType::Code, Some(lang)) if !lang.is_empty() => {
+                    Some(format!("[C:{}]", lang))
+                }
+                _ => None,
             };
-            let _ = SelectObject(dis.hDC, font);
-            text_out_clipped(dis.hDC, x, text_y, &run, &preview_clip);
-            x += measure_text(dis.hDC, &run);
-        }
-        let _ = SelectObject(dis.hDC, regular);
-    }
+            let prefix: &str = prefix_owned.as_deref().unwrap_or(item.kind.tag());
+            let preview: &str = if item.kind == ItemType::Image {
+                ""
+            } else {
+                item.preview.as_str()
+            };
+            let suffix = relative_time(item.timestamp);
 
-    // Time column — right-anchored before the pin glyph. On selection
-    // we collapse secondary text up to primary so it stays readable.
-    let secondary = if selected { pal.text } else { pal.subtext };
-    SetTextColor(dis.hDC, COLORREF(secondary));
-    text_out(dis.hDC, time_x, text_y, &drw.suffix);
+            let pad: i32 = 12;
+            let col_gap: i32 = 10;
+            // Vertically center the text in the row using the selected font's metrics.
+            let mut tm = TEXTMETRICW::default();
+            let _ = GetTextMetricsW(dis.hDC, &mut tm);
+            let row_h = dis.rcItem.bottom - dis.rcItem.top;
 
-    // Pin glyph: gold accent when pinned, dim when not. Selected rows
-    // keep the same hierarchy so the pinned state stays readable.
-    let pin_color = if item.pinned {
-        pal.accent
-    } else if selected {
-        pal.text
-    } else {
-        pal.pin_dim
-    };
-    SetTextColor(dis.hDC, COLORREF(pin_color));
-    let glyph = if item.pinned {
-        PIN_GLYPH_PINNED
-    } else {
-        PIN_GLYPH_UNPINNED
-    };
-    let glyph_w = measure_text(dis.hDC, glyph);
-    let glyph_x = pin_left + (PIN_AREA_W - glyph_w) / 2;
-    text_out(dis.hDC, glyph_x, text_y, glyph);
+            let regular = HFONT(
+                SendMessageW(dis.hwndItem, WM_GETFONT, WPARAM(0), LPARAM(0)).0 as *mut _,
+            );
+            let bold = BOLD_FONT.with(|c| c.get());
+            let _ = SelectObject(dis.hDC, regular);
 
-    // Skip DrawFocusRect — Win11 controls don't draw the dotted focus
-    // rectangle on selected rows; the selection fill is the focus cue.
+            let text_y = dis.rcItem.top + (row_h - tm.tmHeight) / 2;
+
+            // Layout: [pad] tag [gap] (thumb [gap])? preview [gap] time [pin column].
+            // Measure tag + time up front so the preview's clip rect is known
+            // before drawing anything.
+            let tag_x = dis.rcItem.left + pad;
+            let tag_w = measure_text(dis.hDC, prefix);
+            let pin_left = dis.rcItem.right - PIN_AREA_W;
+            let time_w = measure_text(dis.hDC, &suffix);
+            let has_thumbnail = item.kind == ItemType::Image;
+            // Image rows are TEXT_ITEM_HEIGHT * 3 tall (see measure_listbox_item);
+            // size the thumbnail at 2/3 of that so it fills the row with padding.
+            let thumb_size = (TEXT_ITEM_HEIGHT * 2) as i32;
+            let thumb_left = tag_x + tag_w + col_gap;
+            let preview_left = if has_thumbnail {
+                thumb_left + thumb_size + col_gap
+            } else {
+                tag_x + tag_w + col_gap
+            };
+            let time_x = (pin_left - col_gap - time_w).max(preview_left);
+            let preview_right = (time_x - col_gap).max(preview_left);
+            let preview_clip = RECT {
+                left: preview_left,
+                top: dis.rcItem.top,
+                right: preview_right,
+                bottom: dis.rcItem.bottom,
+            };
+
+            // Tag chip — colored per format. Selection keeps the type color so
+            // the chip's visual signal survives the selection brush.
+            SetTextColor(dis.hDC, COLORREF(item.kind.tag_color(&pal)));
+            text_out(dis.hDC, tag_x, text_y, prefix);
+
+            if has_thumbnail {
+                let thumb_y = dis.rcItem.top + (row_h - thumb_size) / 2;
+                draw_image_thumbnail(
+                    dis.hDC,
+                    item.id,
+                    &item.raw,
+                    thumb_left,
+                    thumb_y,
+                    thumb_size,
+                );
+            }
+
+            // Preview in primary text color, with bold runs for fuzzy-match
+            // highlights. Clipped to the middle column so a long preview can't
+            // bleed under the time / pin columns.
+            SetTextColor(dis.hDC, COLORREF(pal.text));
+            let mut x = preview_left;
+            if !preview.is_empty() {
+                if row.indices.is_empty() {
+                    text_out_clipped(dis.hDC, x, text_y, preview, &preview_clip);
+                } else {
+                    // Sorted-cursor walk: row.indices is the ascending byte-offset
+                    // list returned by fuzzy_indices. We emit `&str` slices of the
+                    // preview directly — no HashSet, no per-run String.
+                    let ctx = PreviewRunCtx {
+                        hdc: dis.hDC,
+                        text_y,
+                        bold,
+                        regular,
+                        clip: preview_clip,
+                    };
+                    let mut idx_iter = row.indices.iter().copied().peekable();
+                    let mut run_start: usize = 0;
+                    let mut run_match = false;
+                    for (byte_i, _ch) in preview.char_indices() {
+                        // Defensive: skip any indices that landed before the
+                        // current char-start (fuzzy_indices returns char-start
+                        // offsets, but we don't want to deadlock on a stray one).
+                        while let Some(&i) = idx_iter.peek() {
+                            if i < byte_i {
+                                idx_iter.next();
+                            } else {
+                                break;
+                            }
+                        }
+                        let is_match =
+                            matches!(idx_iter.peek(), Some(&i) if i == byte_i);
+                        if is_match {
+                            idx_iter.next();
+                        }
+                        if byte_i > run_start && is_match != run_match {
+                            emit_preview_run(
+                                &ctx,
+                                &mut x,
+                                &preview[run_start..byte_i],
+                                run_match,
+                            );
+                            run_start = byte_i;
+                        }
+                        run_match = is_match;
+                    }
+                    if run_start < preview.len() {
+                        emit_preview_run(
+                            &ctx,
+                            &mut x,
+                            &preview[run_start..],
+                            run_match,
+                        );
+                    }
+                    let _ = SelectObject(dis.hDC, regular);
+                }
+            }
+
+            // Time column — right-anchored before the pin glyph. On selection
+            // we collapse secondary text up to primary so it stays readable.
+            let secondary = if selected { pal.text } else { pal.subtext };
+            SetTextColor(dis.hDC, COLORREF(secondary));
+            text_out(dis.hDC, time_x, text_y, &suffix);
+
+            // Pin glyph: gold accent when pinned, dim when not. Selected rows
+            // keep the same hierarchy so the pinned state stays readable.
+            let pin_color = if item.pinned {
+                pal.accent
+            } else if selected {
+                pal.text
+            } else {
+                pal.pin_dim
+            };
+            SetTextColor(dis.hDC, COLORREF(pin_color));
+            let glyph = if item.pinned {
+                PIN_GLYPH_PINNED
+            } else {
+                PIN_GLYPH_UNPINNED
+            };
+            let glyph_w = measure_text(dis.hDC, glyph);
+            let glyph_x = pin_left + (PIN_AREA_W - glyph_w) / 2;
+            text_out(dis.hDC, glyph_x, text_y, glyph);
+
+            // Skip DrawFocusRect — Win11 controls don't draw the dotted focus
+            // rectangle on selected rows; the selection fill is the focus cue.
+        });
+    });
 }
 
 /// Measure the height for each item based on its type.
