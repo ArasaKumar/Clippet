@@ -31,28 +31,6 @@ pub(crate) fn format_item_line(item: &ClipItem) -> String {
     )
 }
 
-/// Three-segment owner-draw layout for one row. Each segment renders in
-/// its own column: the tag chip in the per-format color, the preview in
-/// primary text (with bold runs for fuzzy-match highlights), and the
-/// relative time right-aligned before the pin glyph.
-pub(crate) struct DrawableLine {
-    pub prefix: String,
-    pub preview: String,
-    pub suffix: String,
-}
-
-pub(crate) fn drawable_line(item: &ClipItem) -> DrawableLine {
-    let kind_label: String = match (&item.kind, item.lang.as_deref()) {
-        (ItemType::Code, Some(lang)) if !lang.is_empty() => format!("[C:{}]", lang),
-        _ => item.kind.tag().to_string(),
-    };
-    DrawableLine {
-        prefix: kind_label,
-        preview: item.preview.clone(),
-        suffix: relative_time(item.timestamp),
-    }
-}
-
 /// Append a freshly captured item, dedupe against the previous entry,
 /// prune to MAX_ITEMS (preserving pins), and persist. Returns true if
 /// the item was actually added (callers use that to gate refresh).

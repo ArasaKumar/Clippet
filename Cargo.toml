@@ -13,6 +13,11 @@ build = "build.rs"
 # Keep the default deny on missing-docs off — this is an app, not a lib.
 unsafe_op_in_unsafe_fn = "allow"
 
+[lints.clippy]
+# Make the SAFETY-comment rule from CLAUDE.md machine-checked. Drift was
+# easy when it lived only in docs.
+undocumented_unsafe_blocks = "warn"
+
 [[bin]]
 name = "clippet"
 path = "src/main.rs"

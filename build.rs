@@ -77,33 +77,25 @@ fn render_icon(target: u32) -> Vec<u8> {
     // Clipboard body — solid mid-blue (the SVG uses a gradient; we settle
     // for a single color since procedural gradients aren't worth the lines
     // of code at this size).
-    fill_rounded_rect(&mut buf, s, u(32.0), u(48.0), u(224.0), u(232.0), u(20.0), [0x29, 0x6F, 0xEC, 0xFF]);
+    fill_rounded_rect(&mut buf, s, [u(32.0), u(48.0), u(224.0), u(232.0)], u(20.0), [0x29, 0x6F, 0xEC, 0xFF]);
 
     // Clip mechanism — darker navy on top.
-    fill_rounded_rect(&mut buf, s, u(80.0), u(24.0), u(176.0), u(68.0), u(10.0), [0x1E, 0x3A, 0x8A, 0xFF]);
+    fill_rounded_rect(&mut buf, s, [u(80.0), u(24.0), u(176.0), u(68.0)], u(10.0), [0x1E, 0x3A, 0x8A, 0xFF]);
 
     // Paper inset.
-    fill_rounded_rect(&mut buf, s, u(56.0), u(80.0), u(200.0), u(216.0), u(6.0), [0xF8, 0xFA, 0xFC, 0xFF]);
+    fill_rounded_rect(&mut buf, s, [u(56.0), u(80.0), u(200.0), u(216.0)], u(6.0), [0xF8, 0xFA, 0xFC, 0xFF]);
 
     // Three text lines.
     let line = [0x94u8, 0xA3, 0xB8, 0xFF];
-    fill_rounded_rect(&mut buf, s, u(76.0), u(108.0), u(180.0), u(118.0), u(3.0), line);
-    fill_rounded_rect(&mut buf, s, u(76.0), u(138.0), u(156.0), u(148.0), u(3.0), line);
-    fill_rounded_rect(&mut buf, s, u(76.0), u(168.0), u(168.0), u(178.0), u(3.0), line);
+    fill_rounded_rect(&mut buf, s, [u(76.0), u(108.0), u(180.0), u(118.0)], u(3.0), line);
+    fill_rounded_rect(&mut buf, s, [u(76.0), u(138.0), u(156.0), u(148.0)], u(3.0), line);
+    fill_rounded_rect(&mut buf, s, [u(76.0), u(168.0), u(168.0), u(178.0)], u(3.0), line);
 
     downsample(&buf, s, target)
 }
 
-fn fill_rounded_rect(
-    buf: &mut [u8],
-    s: u32,
-    x0: f32,
-    y0: f32,
-    x1: f32,
-    y1: f32,
-    r: f32,
-    color: [u8; 4],
-) {
+fn fill_rounded_rect(buf: &mut [u8], s: u32, rect: [f32; 4], r: f32, color: [u8; 4]) {
+    let [x0, y0, x1, y1] = rect;
     let w = s as i32;
     let h = s as i32;
     let lo_x = (x0 as i32 - 1).max(0) as u32;
@@ -163,7 +155,7 @@ fn blend_pixel(buf: &mut [u8], s: u32, x: u32, y: u32, color: [u8; 4]) {
 fn downsample(src: &[u8], s_size: u32, t_size: u32) -> Vec<u8> {
     let factor = s_size / t_size;
     let mut out = vec![0u8; (t_size * t_size * 4) as usize];
-    let n = (factor * factor) as u32;
+    let n = factor * factor;
     for y in 0..t_size {
         for x in 0..t_size {
             let mut r = 0u32;
