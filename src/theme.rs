@@ -14,8 +14,10 @@ use windows::Win32::UI::Controls::SetWindowTheme;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::state::{
-    Palette, DARK_PALETTE, DWMSBT_TRANSIENTWINDOW, DWMWCP_ROUND, LIGHT_PALETTE,
+    BG_BRUSH, IS_DARK, LISTBOX, PALETTE, Palette, SEARCH, SEARCH_BG_BRUSH, SEL_BRUSH,
+    THEME_OVERRIDE, DARK_PALETTE, DWMSBT_TRANSIENTWINDOW, DWMWCP_ROUND, LIGHT_PALETTE,
 };
+use crate::storage::{load_settings, save_settings};
 use crate::util::to_wide;
 
 /// Read HKCU\...\Personalize\AppsUseLightTheme. Returns None on any
@@ -57,10 +59,18 @@ pub(crate) unsafe fn registry_apps_use_light_theme() -> Option<bool> {
     Some(value != 0)
 }
 
-pub(crate) fn detect_palette() -> (Palette, bool) {
-    // Default to light when the value is missing — that's Win11's factory state.
-    // SAFETY: registry_apps_use_light_theme cleans up its own handles.
-    let light = unsafe { registry_apps_use_light_theme().unwrap_or(true) };
+/// Resolve the active palette from the user's override (set by the
+/// footer theme-toggle button, persisted in settings.json) falling
+/// back to the system `AppsUseLightTheme` value. Returns
+/// `(palette, is_dark)`.
+pub(crate) fn detect_palette(override_light: Option<bool>) -> (Palette, bool) {
+    let light = match override_light {
+        Some(v) => v,
+        // Default to light when the system value is missing — that's
+        // Win11's factory state. SAFETY: registry_apps_use_light_theme
+        // cleans up its own handles.
+        None => unsafe { registry_apps_use_light_theme().unwrap_or(true) },
+    };
     if light {
         (LIGHT_PALETTE, false)
     } else {
@@ -184,4 +194,86 @@ pub(crate) unsafe fn apply_popup_style(hwnd: HWND, is_dark: bool) {
         &border as *const _ as *const _,
         std::mem::size_of::<u32>() as u32,
     );
+}
+
+/// Switch the popup between light and dark at runtime: rebuild the
+/// solid brushes, update the window class background (so WM_ERASEBKGND
+/// stops painting with the old color), reapply DWM + common-control
+/// theming, persist the choice to settings.json, then invalidate so
+/// every child + parent-painted surface repaints with the new palette.
+///
+/// Safe to call repeatedly — old brushes are released after the swap so
+/// repeated toggles don't accumulate GDI handles.
+///
+/// SAFETY: `hwnd` is the popup window owned by this process; all the
+/// thread-locals touched here are populated for the session.
+pub(crate) unsafe fn apply_theme(hwnd: HWND, light: bool) {
+    let (palette, is_dark) = if light {
+        (LIGHT_PALETTE, false)
+    } else {
+        (DARK_PALETTE, true)
+    };
+    PALETTE.with(|c| c.set(palette));
+    IS_DARK.with(|c| c.set(is_dark));
+    THEME_OVERRIDE.with(|c| c.set(Some(light)));
+
+    // Create the replacement brushes first; swap them in atomically per
+    // thread-local; then release the previous handles. Holding both for
+    // a moment keeps the WM_CTLCOLOR* handlers from ever returning a
+    // null brush during the swap.
+    let new_bg = CreateSolidBrush(COLORREF(palette.bg));
+    let new_sel = CreateSolidBrush(COLORREF(palette.row_sel));
+    let new_search_bg = CreateSolidBrush(COLORREF(palette.search_bg));
+
+    let old_bg = BG_BRUSH.with(|c| {
+        let prev = c.get();
+        c.set(new_bg);
+        prev
+    });
+    let old_sel = SEL_BRUSH.with(|c| {
+        let prev = c.get();
+        c.set(new_sel);
+        prev
+    });
+    let old_search_bg = SEARCH_BG_BRUSH.with(|c| {
+        let prev = c.get();
+        c.set(new_search_bg);
+        prev
+    });
+
+    // The window class still references the original brush for the
+    // default WM_ERASEBKGND path; swap it too so any erase between the
+    // toggle and the WM_PAINT below uses the new color.
+    SetClassLongPtrW(hwnd, GCLP_HBRBACKGROUND, new_bg.0 as isize);
+
+    if !old_bg.0.is_null() {
+        let _ = DeleteObject(old_bg);
+    }
+    if !old_sel.0.is_null() {
+        let _ = DeleteObject(old_sel);
+    }
+    if !old_search_bg.0.is_null() {
+        let _ = DeleteObject(old_search_bg);
+    }
+
+    // Reapply DWM caption + scrollbar/edit theming so listbox scrollbars
+    // and the edit's caret render in the matching variant.
+    apply_popup_style(hwnd, is_dark);
+    let lb = LISTBOX.with(|l| *l.borrow());
+    let edit = SEARCH.with(|c| c.get());
+    if !lb.0.is_null() && !edit.0.is_null() {
+        apply_child_theme(lb, edit, is_dark);
+    }
+
+    // Repaint the footer's tooltip with the new "Switch to ..." label.
+    crate::footer::refresh_theme_tooltip(hwnd);
+
+    let _ = InvalidateRect(hwnd, None, true);
+
+    // Persist so the choice survives a restart. Read-modify-write the
+    // existing settings.json — autostart / popup-size fields are left
+    // alone.
+    let mut s = load_settings();
+    s.theme_override = Some(light);
+    save_settings(&s);
 }

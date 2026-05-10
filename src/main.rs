@@ -61,7 +61,8 @@ use crate::state::{
 };
 use crate::storage::{load_history, load_settings};
 use crate::theme::{
-    apply_child_theme, apply_popup_style, create_title_font, create_ui_font, detect_palette,
+    apply_child_theme, apply_popup_style, apply_theme, create_title_font, create_ui_font,
+    detect_palette,
 };
 use crate::titlebar::{
     create_titlebar, draw_close_button, layout_titlebar, paint_search_chrome, paint_titlebar_bg,
@@ -355,10 +356,16 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             let mut rc = RECT::default();
             if GetClientRect(hwnd, &mut rc).is_ok() {
                 match footer::hit_test(rc.right, rc.bottom, x, y) {
-                    0 => clear_history(hwnd),
-                    1 => show_settings_stub(hwnd),
-                    2 => show_about(hwnd),
-                    3 => { let _ = DestroyWindow(hwnd); }
+                    0 => {
+                        // Toggle theme: flip the currently-displayed mode.
+                        // apply_theme persists the choice and repaints.
+                        let now_dark = IS_DARK.with(|c| c.get());
+                        apply_theme(hwnd, now_dark);
+                    }
+                    1 => clear_history(hwnd),
+                    2 => show_settings_stub(hwnd),
+                    3 => show_about(hwnd),
+                    4 => { let _ = DestroyWindow(hwnd); }
                     _ => {}
                 }
             }
@@ -591,7 +598,12 @@ fn main() -> Result<()> {
         // palette before we register the window class — the class's
         // hbrBackground needs the matching solid brush to avoid a
         // light flash on first paint.
-        let (palette, is_dark) = detect_palette();
+        // Honor any persisted theme override the user set via the
+        // footer theme-toggle button; fall back to the system value
+        // when no override is recorded.
+        let saved_settings = load_settings();
+        crate::state::THEME_OVERRIDE.with(|c| c.set(saved_settings.theme_override));
+        let (palette, is_dark) = detect_palette(saved_settings.theme_override);
         PALETTE.with(|c| c.set(palette));
         IS_DARK.with(|c| c.set(is_dark));
         let bg_brush = CreateSolidBrush(COLORREF(palette.bg));
@@ -631,12 +643,11 @@ fn main() -> Result<()> {
 
         // Restore any persisted popup size; fall back to the defaults
         // on first launch (or after a settings.json reset).
-        let saved = load_settings();
-        let init_w = saved
+        let init_w = saved_settings
             .popup_w
             .filter(|w| *w >= POPUP_MIN_W)
             .unwrap_or(POPUP_W);
-        let init_h = saved
+        let init_h = saved_settings
             .popup_h
             .filter(|h| *h >= POPUP_MIN_H)
             .unwrap_or(POPUP_H);
