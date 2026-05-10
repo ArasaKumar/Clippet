@@ -1,6 +1,6 @@
 [package]
 name = "clippet"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 # MSRV: thread_local! const blocks (1.59), let-else (1.65), div_ceil (1.73).
 rust-version = "1.73"
