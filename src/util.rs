@@ -16,6 +16,19 @@ pub(crate) fn now_unix() -> u64 {
         .unwrap_or(0)
 }
 
+/// 64-bit FNV-1a of `bytes`. Used as a stable, version-agnostic content
+/// fingerprint for consecutive-duplicate suppression — `std`'s default
+/// hasher is explicitly not stable across releases, so persisting it on
+/// disk would silently re-key after a Rust upgrade.
+pub(crate) fn fnv1a_64(bytes: &[u8]) -> u64 {
+    let mut h: u64 = 0xcbf29ce484222325;
+    for b in bytes {
+        h ^= *b as u64;
+        h = h.wrapping_mul(0x100000001b3);
+    }
+    h
+}
+
 pub(crate) fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }

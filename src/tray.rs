@@ -252,7 +252,20 @@ pub(crate) unsafe fn clear_history(hwnd: HWND) {
         MB_YESNO | MB_ICONQUESTION,
     );
     if r == IDYES {
-        HISTORY.with(|h| h.borrow_mut().retain(|it| it.pinned));
+        // Take ownership of the dropped (non-pinned) items so their
+        // media files can be deleted off disk too — pinned items keep
+        // their media. Has to happen before the save_history call so a
+        // crash mid-cleanup doesn't leave dangling references.
+        let dropped: Vec<crate::state::ClipItem> = HISTORY.with(|h| {
+            let mut hist = h.borrow_mut();
+            let (kept, dropped): (Vec<_>, Vec<_>) =
+                hist.drain(..).partition(|it| it.pinned);
+            *hist = kept;
+            dropped
+        });
+        for item in &dropped {
+            crate::storage::delete_media_for(item);
+        }
         clear_thumb_cache();
         let snapshot: Vec<_> = HISTORY.with(|h| h.borrow().clone());
         save_history(&snapshot);

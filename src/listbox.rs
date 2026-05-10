@@ -24,6 +24,7 @@ use crate::state::{
     LISTBOX_SUBCLASS_ID, ODS_SELECTED_BIT, PALETTE, PIN_AREA_W, PIN_GLYPH_PINNED,
     PIN_GLYPH_UNPINNED, SEARCH, SEARCH_HEIGHT, SELF_HWND, SEL_BRUSH, TEXT_ITEM_HEIGHT,
 };
+use crate::storage::media_path;
 use crate::tray::update_tray_tooltip;
 use crate::util::{relative_time, to_wide};
 
@@ -453,21 +454,46 @@ unsafe fn build_thumb_bitmap(hdc: HDC, raw: &[u8]) -> Option<CachedThumb> {
 /// SAFETY: hdc is the DC supplied by WM_DRAWITEM. The cached HBITMAP is
 /// selected into a memory DC that is created and destroyed in this call;
 /// the previous GDI selection is restored before DeleteDC.
-unsafe fn draw_image_thumbnail(hdc: HDC, id: u64, raw: &[u8], x: i32, y: i32, size: i32) {
+unsafe fn draw_image_thumbnail(
+    hdc: HDC,
+    id: u64,
+    thumb_file: Option<&str>,
+    x: i32,
+    y: i32,
+    size: i32,
+) {
     // Produce or look up the cached bitmap. We borrow_mut for the
     // insertion, then drop the borrow before reading so the (very small)
     // chance of re-entry through GDI doesn't double-borrow.
+    //
+    // The seed bytes for the bitmap are the on-disk thumbnail PNG. We
+    // pay the disk read once per item per session — subsequent paints
+    // hit the in-memory cache. If the file is missing (never written,
+    // or removed externally), the cache stores a sentinel via `None`
+    // return; callers fall through to the placeholder branch below.
     let (hbmp, src_w, src_h) = THUMB_CACHE.with(|cache| {
         if let Some(thumb) = cache.borrow().get(&id) {
             return Some((thumb.hbmp, thumb.width, thumb.height));
         }
-        let new_thumb = build_thumb_bitmap(hdc, raw)?;
+        let path = media_path(thumb_file?)?;
+        let bytes = std::fs::read(&path).ok()?;
+        let new_thumb = build_thumb_bitmap(hdc, &bytes)?;
         let result = (new_thumb.hbmp, new_thumb.width, new_thumb.height);
         cache.borrow_mut().insert(id, new_thumb);
         Some(result)
     })
     .unwrap_or((HBITMAP(std::ptr::null_mut()), 0, 0));
     if hbmp.0.is_null() || src_w <= 0 || src_h <= 0 {
+        // Placeholder block: a flat tinted square so the row geometry
+        // still reads as image-shaped. Uses the image-tag color at low
+        // saturation by routing through the existing palette accent.
+        let pal = PALETTE.with(|c| c.get());
+        let brush = CreateSolidBrush(COLORREF(pal.tag_image));
+        if !brush.0.is_null() {
+            let rc = RECT { left: x, top: y, right: x + size, bottom: y + size };
+            FillRect(hdc, &rc, brush);
+            let _ = DeleteObject(brush);
+        }
         return;
     }
 
@@ -623,7 +649,7 @@ pub(crate) unsafe fn draw_listbox_item(dis: &DRAWITEMSTRUCT) {
                 draw_image_thumbnail(
                     dis.hDC,
                     item.id,
-                    &item.raw,
+                    item.thumb_file.as_deref(),
                     thumb_left,
                     thumb_y,
                     thumb_size,
@@ -793,16 +819,19 @@ pub(crate) unsafe fn copy_at_row(hwnd: HWND, row: i32) {
 /// SAFETY: HISTORY mutation is on the UI thread.
 pub(crate) unsafe fn delete_at_row(hwnd: HWND, row: i32) {
     let Some(hi) = row_to_hist(row) else { return };
-    let removed_id = HISTORY.with(|h| {
+    let removed = HISTORY.with(|h| {
         let mut hist = h.borrow_mut();
         if hi < hist.len() {
-            Some(hist.remove(hi).id)
+            Some(hist.remove(hi))
         } else {
             None
         }
     });
-    if let Some(id) = removed_id {
-        invalidate_thumb_cache(id);
+    if let Some(item) = removed {
+        // Disk + GDI cleanup mirrors the prune path so a manual delete
+        // never leaks media files or HBITMAP handles.
+        crate::storage::delete_media_for(&item);
+        invalidate_thumb_cache(item.id);
     }
     HISTORY.with(|h| crate::storage::save_history(&h.borrow()));
     refresh_listbox();

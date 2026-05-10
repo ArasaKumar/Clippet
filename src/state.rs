@@ -141,7 +141,11 @@ pub(crate) const LISTBOX_SUBCLASS_ID: usize = 0xC1;
 // ---------------------------------------------------------------------
 
 pub(crate) const MAX_ITEMS: usize = 200;
-pub(crate) const STORAGE_VERSION: u32 = 1;
+pub(crate) const STORAGE_VERSION: u32 = 2;
+/// Longest edge of the cached thumbnail PNG written next to each image
+/// in `%APPDATA%\Clippet\media\`. Sized to fit the 2*TEXT_ITEM_HEIGHT
+/// thumb area at 1.5x DPI; the listbox StretchBlts to row size.
+pub(crate) const THUMB_MAX_SIZE: u32 = 96;
 
 // =====================================================================
 // Win11 palette — colors are COLORREF (0x00BBGGRR), so written in BGR
@@ -249,12 +253,27 @@ impl ItemType {
 pub(crate) struct ClipItem {
     pub id: u64,
     pub kind: ItemType,
+    /// Inline payload bytes. Empty for `Image` items (PNG bytes live on
+    /// disk under `media/{id}.png` instead — keeps history.json tiny and
+    /// peak RAM bounded). Populated for every other kind.
     pub raw: Vec<u8>,
     pub preview: String,
     pub timestamp: u64,
     pub pinned: bool,
     /// Optional language hint (file extension, lower-cased) for Code items.
     pub lang: Option<String>,
+    /// Stable FNV-1a/64 of the source bytes (PNG bytes for images, raw
+    /// bytes otherwise). Drives consecutive-duplicate suppression in
+    /// `push_item` so we don't need to keep the bytes resident just to
+    /// compare against the next capture.
+    pub content_hash: u64,
+    /// Filename within `media/` for the full-resolution PNG. Some only
+    /// for `Image` items.
+    pub media_file: Option<String>,
+    /// Filename within `media/` for the listbox thumbnail PNG.
+    pub thumb_file: Option<String>,
+    pub media_w: Option<u32>,
+    pub media_h: Option<u32>,
 }
 
 #[derive(Default, Clone, Copy)]

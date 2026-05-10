@@ -38,7 +38,11 @@ pub(crate) fn push_item(item: ClipItem) -> bool {
     let pushed = HISTORY.with(|h| {
         let mut hist = h.borrow_mut();
         if let Some(last) = hist.last() {
-            if last.kind == item.kind && last.raw == item.raw {
+            // Hash-based dedup so it works uniformly for inline payloads
+            // (text/code/html/rtf/sheet/file) and disk-backed images
+            // alike — the latter have empty `raw`, so the old byte
+            // compare collapsed every captured image into one entry.
+            if last.kind == item.kind && last.content_hash == item.content_hash {
                 return false;
             }
         }

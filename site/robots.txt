@@ -1,0 +1,5 @@
+# Clippet — landing page is fully indexable.
+User-agent: *
+Allow: /
+
+Sitemap: https://arasakumar.github.io/Clippet/sitemap.xml
