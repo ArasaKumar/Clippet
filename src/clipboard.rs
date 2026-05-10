@@ -17,11 +17,12 @@ use windows::Win32::UI::Shell::*;
 
 use crate::state::{
     ClipItem, ItemType, RegFormats, CF_BITMAP, CF_DIB, CF_HDROP, CF_TEXT, CF_UNICODETEXT, NEXT_ID,
-    REG,
+    REG, THUMB_MAX_SIZE,
 };
+use crate::storage::{media_filenames, write_media_atomic};
 use crate::util::{
-    cf_html_to_plain, extract_lang_from_title, first_nonempty_line, foreground_window_title,
-    now_unix, rtf_to_plain, title_is_ide, truncate_preview,
+    cf_html_to_plain, debug_log, extract_lang_from_title, first_nonempty_line, fnv1a_64,
+    foreground_window_title, now_unix, rtf_to_plain, title_is_ide, truncate_preview,
 };
 
 // =====================================================================
@@ -232,6 +233,7 @@ unsafe fn read_files() -> Option<ClipItem> {
         format!("{} + {} more", first, files.len() - 1)
     };
 
+    let content_hash = fnv1a_64(&raw);
     Some(ClipItem {
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         kind: ItemType::File,
@@ -240,7 +242,26 @@ unsafe fn read_files() -> Option<ClipItem> {
         timestamp: now_unix(),
         pinned: false,
         lang: None,
+        content_hash,
+        media_file: None,
+        thumb_file: None,
+        media_w: None,
+        media_h: None,
     })
+}
+
+/// Encode a thumbnail PNG (longest edge ≤ THUMB_MAX_SIZE) from a
+/// full-resolution PNG. Returns the encoded bytes on success.
+fn encode_thumbnail_png(full_png: &[u8]) -> Option<Vec<u8>> {
+    let img = image::load_from_memory_with_format(full_png, image::ImageFormat::Png).ok()?;
+    // `thumbnail` does box-then-triangle resampling — fast, good enough
+    // for a 96-px UI thumb. Lanczos is overkill for this size.
+    let thumb = img.thumbnail(THUMB_MAX_SIZE, THUMB_MAX_SIZE);
+    let mut out: Vec<u8> = Vec::new();
+    thumb
+        .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
+        .ok()?;
+    Some(out)
 }
 
 /// SAFETY: caller must hold the clipboard open. CF_DIB is a global
@@ -268,19 +289,64 @@ unsafe fn read_image() -> Option<ClipItem> {
         (0, 0)
     };
 
-    // Prefer PNG storage so history.json stays small. If the DIB is in
-    // a shape we don't handle, just keep the raw bytes — paste sniffs
-    // the PNG signature to decide which branch to take.
-    let raw = dib_to_png(&dib_bytes).unwrap_or(dib_bytes);
+    // Prefer PNG on disk so history.json stays tiny and the listbox
+    // can pull thumbnails without re-decoding the full image. If the
+    // DIB shape isn't one we can encode (rare clipboard providers),
+    // fall back to writing the raw DIB bytes — paste path detects the
+    // form via PNG-signature sniff.
+    let png_bytes = dib_to_png(&dib_bytes);
+    let (full_bytes, is_png) = match png_bytes {
+        Some(b) => (b, true),
+        None => (dib_bytes, false),
+    };
+
+    let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+    let (full_name, thumb_name) = media_filenames(id);
+
+    if let Err(e) = write_media_atomic(&full_name, &full_bytes) {
+        debug_log(&format!("Clippet: write media {} failed: {}", full_name, e));
+        return None;
+    }
+
+    // Thumbnail is only feasible when we managed to encode PNG. If we
+    // had to fall back to raw DIB, skip the thumb (listbox will render
+    // a placeholder block).
+    let thumb_file = if is_png {
+        match encode_thumbnail_png(&full_bytes) {
+            Some(thumb_bytes) => match write_media_atomic(&thumb_name, &thumb_bytes) {
+                Ok(()) => Some(thumb_name.clone()),
+                Err(e) => {
+                    debug_log(&format!(
+                        "Clippet: write thumb {} failed: {}",
+                        thumb_name, e
+                    ));
+                    None
+                }
+            },
+            None => {
+                debug_log("Clippet: thumbnail encode failed");
+                None
+            }
+        }
+    } else {
+        None
+    };
+
+    let content_hash = fnv1a_64(&full_bytes);
 
     Some(ClipItem {
-        id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
+        id,
         kind: ItemType::Image,
-        raw,
+        raw: Vec::new(),
         preview: format!("[Image {}x{}]", w, h_abs),
         timestamp: now_unix(),
         pinned: false,
         lang: None,
+        content_hash,
+        media_file: Some(full_name),
+        thumb_file,
+        media_w: if w > 0 { Some(w as u32) } else { None },
+        media_h: if h_abs > 0 { Some(h_abs as u32) } else { None },
     })
 }
 
@@ -318,15 +384,22 @@ unsafe fn read_unicode_text() -> Option<ClipItem> {
 
     let title = foreground_window_title();
     let (kind, preview, lang) = classify_text(&s, &title);
+    let raw = s.as_bytes().to_vec();
+    let content_hash = fnv1a_64(&raw);
 
     Some(ClipItem {
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
         kind,
-        raw: s.as_bytes().to_vec(),
+        raw,
         preview,
         timestamp: now_unix(),
         pinned: false,
         lang,
+        content_hash,
+        media_file: None,
+        thumb_file: None,
+        media_w: None,
+        media_h: None,
     })
 }
 
@@ -352,6 +425,7 @@ unsafe fn read_ansi_text() -> Option<ClipItem> {
     let s = String::from_utf8_lossy(&bytes).into_owned();
     let title = foreground_window_title();
     let (kind, preview, lang) = classify_text(&s, &title);
+    let content_hash = fnv1a_64(&bytes);
 
     Some(ClipItem {
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
@@ -361,6 +435,11 @@ unsafe fn read_ansi_text() -> Option<ClipItem> {
         timestamp: now_unix(),
         pinned: false,
         lang,
+        content_hash,
+        media_file: None,
+        thumb_file: None,
+        media_w: None,
+        media_h: None,
     })
 }
 
@@ -397,6 +476,7 @@ unsafe fn read_global_bytes(fmt: u32, kind: ItemType, label: &str) -> Option<Cli
             p
         }
     };
+    let content_hash = fnv1a_64(&bytes);
 
     Some(ClipItem {
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
@@ -406,6 +486,11 @@ unsafe fn read_global_bytes(fmt: u32, kind: ItemType, label: &str) -> Option<Cli
         timestamp: now_unix(),
         pinned: false,
         lang: None,
+        content_hash,
+        media_file: None,
+        thumb_file: None,
+        media_w: None,
+        media_h: None,
     })
 }
 
@@ -448,6 +533,7 @@ unsafe fn read_spreadsheet_via_text() -> Option<ClipItem> {
     if rows == 0 || cols == 0 {
         return None;
     }
+    let content_hash = fnv1a_64(&bytes);
 
     Some(ClipItem {
         id: NEXT_ID.fetch_add(1, Ordering::Relaxed),
@@ -457,6 +543,11 @@ unsafe fn read_spreadsheet_via_text() -> Option<ClipItem> {
         timestamp: now_unix(),
         pinned: false,
         lang: None,
+        content_hash,
+        media_file: None,
+        thumb_file: None,
+        media_w: None,
+        media_h: None,
     })
 }
 

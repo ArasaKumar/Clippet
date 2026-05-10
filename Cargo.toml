@@ -1,6 +1,6 @@
 [package]
 name = "clippet"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 # MSRV: thread_local! const blocks (1.59), let-else (1.65), div_ceil (1.73).
 rust-version = "1.73"
@@ -50,6 +50,7 @@ serde_json = "1"
 dirs = "5"
 base64 = "0.22"
 png = "0.17"
+image = { version = "0.25", default-features = false, features = ["png"] }
 fuzzy-matcher = "0.3"
 
 [build-dependencies]

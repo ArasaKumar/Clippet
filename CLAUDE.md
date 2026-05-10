@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-Clippet is a native Windows 11 clipboard manager: single `.exe`, no Electron / Tauri / Qt / web view, no installer, < 8 MB RAM at idle. Rust + `windows-rs` Win32 bindings only. The seven feature levels (clipboard listener → popup hotkey → persistence → rich content → tray → fuzzy search → pin/context-menu) are all complete; per-level design notes live in `docs/level-*.md` and the roadmap in `PLAN.md`.
+Clippet is a native Windows 11 clipboard manager: single `.exe`, no Electron / Tauri / Qt / web view, no installer, ~15 MB working set / < 2 MB private bytes at idle (measured on v0.2.0; image payloads stay off the heap by living as PNGs under `%APPDATA%\Clippet\media\` rather than base64-inlined in `history.json`). Rust + `windows-rs` Win32 bindings only. The seven feature levels (clipboard listener → popup hotkey → persistence → rich content → tray → fuzzy search → pin/context-menu) are all complete; per-level design notes live in `docs/level-*.md` and the roadmap in `PLAN.md`. PLAN.md still records the original "< 8 MB" target — that was the early-phase goal before image storage was profiled and is left in place as historical intent, not a current claim.
 
 The global hotkey is **Ctrl+Shift+V** (Win+V is held by the Win11 shell even with clipboard history disabled, so it was abandoned).
 

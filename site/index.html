@@ -4,10 +4,16 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Clippet — The Windows 11 clipboard manager that respects your machine</title>
-  <meta name="description" content="A native, single-binary clipboard history manager for Windows 11. Built in Rust on raw Win32. No Electron, no telemetry, under 8 MB of RAM at idle." />
+  <meta name="description" content="A free, native, single-binary clipboard history manager for Windows 11. Built in Rust on raw Win32. Lightweight alternative to Ditto, CopyQ, ClipboardFusion, ClipClip, Pasteboard, Clipboard Master, ClipMate, Clipdiary, and Win+V. Fuzzy search across history, pinned items, RTF / HTML / image / file fidelity, no Electron, no telemetry, around 15 MB of RAM at idle." />
+  <meta name="keywords" content="clipboard manager, Windows 11 clipboard, clipboard history, clipboard search, Win+V alternative, Ditto alternative, CopyQ alternative, ClipboardFusion alternative, ClipClip alternative, Pasteboard alternative, Clipboard Master alternative, ClipMate alternative, Clipdiary alternative, PastePilot alternative, native clipboard manager, Rust clipboard, free clipboard manager, lightweight clipboard manager, no Electron clipboard, open source clipboard manager Windows" />
+  <meta name="author" content="Arasa Kumar" />
+  <meta name="robots" content="index, follow, max-image-preview:large" />
   <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)" />
   <meta name="theme-color" content="#f7f8fc" media="(prefers-color-scheme: light)" />
+  <meta name="application-name" content="Clippet" />
+  <meta name="format-detection" content="telephone=no" />
 
+  <link rel="canonical" href="https://arasakumar.github.io/Clippet/" />
   <link rel="icon" type="image/svg+xml" href="clippet.svg" />
   <link rel="stylesheet" href="styles.css" />
 
@@ -24,11 +30,154 @@
     })();
   </script>
 
-  <meta property="og:title" content="Clippet — Windows 11 clipboard manager" />
-  <meta property="og:description" content="Native, single-binary, < 8 MB RAM, no telemetry. Ctrl+Shift+V brings up your clipboard history." />
+  <!-- Open Graph (Facebook, LinkedIn, Slack, Discord, …) -->
+  <meta property="og:title" content="Clippet — Windows 11 clipboard manager with search · Ditto / CopyQ / ClipboardFusion alternative" />
+  <meta property="og:description" content="Free native single-binary clipboard history for Windows 11 — fuzzy search, pinned items, rich-format paste. A lightweight alternative to Ditto, CopyQ, ClipboardFusion, ClipClip, Pasteboard, and Win+V. ~15 MB RAM, no Electron, no telemetry." />
   <meta property="og:type" content="website" />
-  <meta property="og:image" content="clippet.svg" />
+  <meta property="og:url" content="https://arasakumar.github.io/Clippet/" />
+  <meta property="og:site_name" content="Clippet" />
+  <meta property="og:locale" content="en_US" />
+  <meta property="og:image" content="https://arasakumar.github.io/Clippet/clippet.svg" />
+  <meta property="og:image:type" content="image/svg+xml" />
+  <meta property="og:image:width" content="512" />
+  <meta property="og:image:height" content="512" />
+  <meta property="og:image:alt" content="Clippet app icon — a stylized paper clip" />
+
+  <!-- Twitter / X -->
   <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="Clippet — Windows 11 clipboard manager with search · Ditto / CopyQ alternative" />
+  <meta name="twitter:description" content="Free native single-binary clipboard history for Windows 11. Lightweight alternative to Ditto, CopyQ, ClipboardFusion, ClipClip, Pasteboard, and Win+V. ~15 MB RAM, no Electron, no telemetry." />
+  <meta name="twitter:image" content="https://arasakumar.github.io/Clippet/clippet.svg" />
+  <meta name="twitter:image:alt" content="Clippet app icon — a stylized paper clip" />
+
+  <!-- Structured data: SoftwareApplication. Helps Google show rich
+       snippets (price, OS, category) in the SERP for "clippet windows
+       11 clipboard manager" queries. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Clippet",
+    "alternateName": [
+      "Clippet for Windows",
+      "Clippet clipboard manager"
+    ],
+    "applicationCategory": "UtilitiesApplication",
+    "applicationSubCategory": "Clipboard manager",
+    "operatingSystem": "Windows 10, Windows 11",
+    "softwareVersion": "0.2.0",
+    "description": "Native Windows 11 clipboard manager with fuzzy search across history, unlimited pinned items, and full-fidelity paste-back for RTF, HTML, images, and files. A free, single-Rust-binary alternative to Ditto, CopyQ, ClipboardFusion, ClipClip, Pasteboard, Clipboard Master, ClipMate, Clipdiary, and Win+V. Around 15 MB RAM at idle, no Electron, no telemetry.",
+    "url": "https://arasakumar.github.io/Clippet/",
+    "image": "https://arasakumar.github.io/Clippet/clippet.svg",
+    "downloadUrl": "https://github.com/ArasaKumar/Clippet/releases",
+    "installUrl": "https://github.com/ArasaKumar/Clippet#install",
+    "license": "https://github.com/ArasaKumar/Clippet/blob/main/LICENSE",
+    "softwareRequirements": "Windows 10 build 1903 or later",
+    "memoryRequirements": "~15 MB working set at idle",
+    "fileSize": "< 2 MB",
+    "featureList": [
+      "Fuzzy search across full clipboard history",
+      "Pinned items survive the 200-item history cap",
+      "Captures RTF, HTML, images, files, spreadsheets, and code",
+      "Auto-detects code from foreground IDE and tags with language",
+      "DIB ↔ PNG round-trip for images",
+      "Native Win32 — no Electron, no Tauri, no web view",
+      "Single self-contained .exe, no installer",
+      "Zero network calls, no telemetry"
+    ],
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "author": {
+      "@type": "Person",
+      "name": "Arasa Kumar",
+      "url": "https://github.com/ArasaKumar"
+    },
+    "maintainer": {
+      "@type": "Person",
+      "name": "Arasa Kumar",
+      "url": "https://github.com/ArasaKumar"
+    }
+  }
+  </script>
+
+  <!-- Structured data: FAQPage. Lets Google render expandable Q&A
+       directly in the search result. Mirror the on-page FAQ exactly —
+       Google penalizes mismatched answers. -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+      {
+        "@type": "Question",
+        "name": "Why not just use Win+V?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The biggest gap is search. Windows' built-in clipboard history has no search box — once you've copied a few dozen things, finding a specific snippet means scrolling through every item by hand. It also doesn't tag entries by format, doesn't let pinned items survive the history cap, and can't be summoned by any hotkey other than Win+V. Clippet keeps a 200-item history, fuzzy-matches as you type, pins anything you mark indefinitely, and shows what each item is (text, RTF, HTML, image, file, spreadsheet, code) before you paste it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How does Clippet compare to Ditto, CopyQ, and other clipboard managers?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Clippet is positioned as the lightweight, search-first option in a category dominated by feature-rich tools. Ditto and CopyQ remain best-in-class for power users who want group hotkeys, scripting, or cross-platform parity — Clippet doesn't try to compete on those axes. ClipboardFusion and ClipClip are great if you want macros or folder organization. Clippet's pitch is the opposite: a single sub-MB .exe, ~15 MB at idle, no installer, no settings panel to learn, fuzzy search the moment the popup opens."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why Ctrl+Shift+V instead of Win+V?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The Windows 11 shell holds Win+V even when clipboard history is disabled in Settings, so it can't be reliably registered by another app. Ctrl+Shift+V is unclaimed in stock Windows and free across most apps."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Does Clippet conflict with Windows' own clipboard history?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "No — they run independently and most users keep both. Win+V still gives you the last few items at a glance; Ctrl+Shift+V opens Clippet's full searchable history. If you'd rather have only one, disable the built-in one under Settings → System → Clipboard."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Where are images stored?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Re-encoded to PNG and written as individual files under %APPDATA%\\Clippet\\media\\ — one full-resolution {id}.png per copy plus a {id}_thumb.png thumbnail for the listbox. Only filenames and dimensions live in history.json, so a 20 MB screenshot adds a few hundred bytes to the metadata file rather than ~26 MB of base64. Image bytes are streamed from disk on paste, kept off the resident heap until needed. Deleting a row removes both files; pinned images are exempt from the 200-item cap."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Why Rust + raw Win32 instead of a framework?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The whole point is the sub-MB binary and a low-double-digit-MB idle footprint (~15 MB working set, < 2 MB private bytes). A framework would add tens of MB of runtime for features Clippet doesn't need."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "Can I trust this with sensitive data?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "The same trust you give any local app that reads your clipboard. Clippet writes to a per-user AppData file that other users on the machine can't read. Source is public domain — audit it."
+        }
+      },
+      {
+        "@type": "Question",
+        "name": "How do I clear history?",
+        "acceptedAnswer": {
+          "@type": "Answer",
+          "text": "Right-click the tray icon → Clear history. Or delete %APPDATA%\\Clippet\\history.json while Clippet isn't running."
+        }
+      }
+    ]
+  }
+  </script>
 </head>
 <body>
 
@@ -39,6 +188,7 @@
       <span>Clippet</span>
     </a>
     <nav class="nav-links" aria-label="Primary">
+      <a href="#alternatives">Alternatives</a>
       <a href="#features">Features</a>
       <a href="#how">How it works</a>
       <a href="#install">Install</a>
@@ -64,8 +214,8 @@
         <h1>The Windows 11 clipboard manager that <span class="grad">respects your machine</span>.</h1>
         <p class="lede">
           A native, single-binary clipboard history utility for Windows 11. Built in Rust on raw Win32 — no Electron,
-          no web view, no background services, no cloud sync. Under 8&nbsp;MB of RAM at idle. Your clipboard never
-          leaves your computer.
+          no web view, no background services, no cloud sync. Around 15&nbsp;MB of RAM at idle, with image payloads
+          streamed from disk so the footprint stays bounded. Your clipboard never leaves your computer.
         </p>
         <div class="cta-row">
           <a class="btn btn-primary" href="https://github.com/ArasaKumar/Clippet" target="_blank" rel="noopener">
@@ -75,7 +225,7 @@
           <a class="btn btn-ghost" href="#install">Build from source</a>
         </div>
         <ul class="hero-stats">
-          <li><strong>&lt; 8 MB</strong><span>RAM at idle</span></li>
+          <li><strong>~15 MB</strong><span>RAM at idle</span></li>
           <li><strong>1 file</strong><span>Single .exe</span></li>
           <li><strong>0</strong><span>Network calls</span></li>
         </ul>
@@ -159,9 +309,10 @@
     <div class="container">
       <h2 class="section-title">Why Clippet</h2>
       <p class="section-lede">
-        Windows 11's built-in clipboard history is fine until you need it to remember more than a few items, paste
-        rich content with full fidelity, or stay out of the cloud. Clippet does all of that in a binary you can
-        drop anywhere.
+        Windows 11's built-in clipboard history (<kbd>Win+V</kbd>) has <strong>no search box</strong> — once your
+        history grows past a screenful, finding the snippet you copied an hour ago means scrolling through every
+        item by hand. Clippet adds fuzzy search across every entry, unlimited pinned items, and high-fidelity
+        paste-back for RTF / HTML / images / files, all in a single binary you can drop anywhere.
       </p>
       <div class="table-wrap">
         <table class="compare-table">
@@ -179,11 +330,63 @@
             <tr><td>Rich content (RTF, HTML, images, files)</td><td class="yes">Yes</td><td class="partial">Partial</td><td class="partial">Varies</td></tr>
             <tr><td>Pin items past the history cap</td><td class="yes">Yes</td><td class="no">No</td><td class="partial">Varies</td></tr>
             <tr><td>Fuzzy search across history</td><td class="yes">Yes</td><td class="no">No</td><td class="partial">Varies</td></tr>
-            <tr><td>Idle memory footprint</td><td class="yes">&lt; 8 MB</td><td>n/a</td><td class="no">100 – 400 MB</td></tr>
+            <tr><td>Idle memory footprint</td><td class="yes">~15 MB</td><td>n/a</td><td class="no">100 – 400 MB</td></tr>
             <tr><td>Distribution</td><td class="yes">One .exe</td><td>OS-bundled</td><td class="no">Installer + updater</td></tr>
             <tr><td>Network access</td><td class="yes">None</td><td class="partial">Cloud sync optional</td><td class="no">Often required</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== ALTERNATIVES ============================ -->
+  <section id="alternatives" class="features">
+    <div class="container">
+      <h2 class="section-title">Coming from another clipboard manager?</h2>
+      <p class="section-lede">
+        Clippet is a free, native alternative to <strong>Ditto</strong>, <strong>CopyQ</strong>,
+        <strong>ClipboardFusion</strong>, <strong>ClipClip</strong>, <strong>Pasteboard</strong>,
+        <strong>Clipboard Master</strong>, <strong>ClipMate</strong>, <strong>Clipdiary</strong>,
+        <strong>PastePilot</strong>, and Windows' built-in <kbd>Win+V</kbd>. Each excels at something —
+        here's what tilts the choice toward Clippet.
+      </p>
+      <div class="feature-grid">
+
+        <article class="feature-card">
+          <h3>Switching from Ditto?</h3>
+          <p><a href="https://ditto-cp.sourceforge.io/" target="_blank" rel="noopener">Ditto</a> is the gold standard of free Windows clipboard managers — battle-tested MFC, group/hotkey assignments, encrypted sync. Clippet trades those assignments for a tighter binary, modern Win11 chrome (acrylic, rounded corners, light/dark theme tracking), and a fuzzy search that highlights matches as you type. Both are open source.</p>
+        </article>
+
+        <article class="feature-card">
+          <h3>Switching from CopyQ?</h3>
+          <p><a href="https://copyq.readthedocs.io/" target="_blank" rel="noopener">CopyQ</a>'s scripting, tabs, and cross-platform support are unmatched if you live in your clipboard. Clippet is the opposite philosophy: no scripting, no tabs, no Qt runtime — just a search-first popup on <kbd>Ctrl+Shift+V</kbd> that gets out of your way. Around 15 MB resident vs CopyQ's ~50 MB.</p>
+        </article>
+
+        <article class="feature-card">
+          <h3>Switching from ClipClip?</h3>
+          <p><a href="https://clipclip.com/" target="_blank" rel="noopener">ClipClip</a> organizes clips into folders, which is great for boilerplate. Clippet skips folders in favor of fuzzy search across everything — typing two characters of any clip is faster than navigating a folder tree once your library grows. No account, no telemetry.</p>
+        </article>
+
+        <article class="feature-card">
+          <h3>Switching from ClipboardFusion?</h3>
+          <p><a href="https://www.clipboardfusion.com/" target="_blank" rel="noopener">ClipboardFusion</a>'s Pro tier offers C# / VB macros and cross-device sync. Clippet is free forever, has no Pro tier, and doesn't sync — your clipboard never leaves the machine. If you need macros, stay with ClipboardFusion. If you don't, Clippet's &lt; 2 MB private memory footprint is hard to beat.</p>
+        </article>
+
+        <article class="feature-card">
+          <h3>Switching from Pasteboard or PastePilot?</h3>
+          <p><a href="https://www.pasteboard.app/" target="_blank" rel="noopener">Pasteboard</a> and <a href="https://paste-pilot.netlify.app/" target="_blank" rel="noopener">PastePilot</a> are modern paid Windows clipboard managers with polished UIs. Clippet matches the polish (Win11 acrylic, custom title bar, fuzzy match highlights) and ships as a single free <code>.exe</code>. No subscription, no account, no telemetry. Source is public domain.</p>
+        </article>
+
+        <article class="feature-card">
+          <h3>Switching from Clipboard Master, ClipMate, or Clipdiary?</h3>
+          <p>The classic Windows clipboard managers — solid, but their UIs predate Win11's design language and they install with traditional setup wizards. Clippet drops in as a single <code>.exe</code>, paints native Win11 chrome (acrylic, rounded corners, DPI-aware), and lives in the system tray. No installer, no admin elevation.</p>
+        </article>
+
+        <article class="feature-card">
+          <h3>Coming from Win+V?</h3>
+          <p>Windows 11's built-in clipboard history is fine for the last few items at a glance, but it has no search box, caps the history at ~25 items, and doesn't let pinned items survive past the cap. Clippet adds fuzzy search across 200 items, unlimited pinning, per-format type tags, and IDE-aware code detection. Both can run side by side.</p>
+        </article>
+
       </div>
     </div>
   </section>
@@ -239,7 +442,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v8m0 0 3-3m-3 3-3-3"/><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>
           </div>
           <h3>Resilient by design</h3>
-          <p>Atomic disk writes (write to .tmp then rename) — no half-written files if power dies mid-save. Every Win32 call has paired cleanup. Pinned items are exempt from history overflow eviction.</p>
+          <p>Atomic disk writes (write to .tmp then rename) — no half-written files if power dies mid-save. Image payloads live as standalone PNGs alongside <code>history.json</code>, so the metadata file stays small and resident RAM stays bounded no matter how big a screenshot you copy. Every Win32 call has paired cleanup. Pinned items are exempt from history overflow eviction.</p>
         </article>
 
       </div>
@@ -254,7 +457,7 @@
       <div class="format-grid">
         <div class="format"><span class="format-tag tag-text">[T]</span><div><strong>Plain text</strong><span>UTF-8 / UTF-16</span></div></div>
         <div class="format"><span class="format-tag tag-rich">[R]</span><div><strong>Rich text</strong><span>Original RTF — fonts and styling preserved</span></div></div>
-        <div class="format"><span class="format-tag tag-image">[I]</span><div><strong>Image</strong><span>Thumbnail preview in popup; round-trips back to DIB on paste</span></div></div>
+        <div class="format"><span class="format-tag tag-image">[I]</span><div><strong>Image</strong><span>Stored as a PNG on disk + a 96 px thumbnail; round-trips back to DIB on paste</span></div></div>
         <div class="format"><span class="format-tag tag-file">[F]</span><div><strong>Files / folders</strong><span>Real CF_HDROP — pastes into Explorer</span></div></div>
         <div class="format"><span class="format-tag tag-html">[H]</span><div><strong>HTML</strong><span>Full CF_HTML fragment with source URL</span></div></div>
         <div class="format"><span class="format-tag tag-sheet">[X]</span><div><strong>Spreadsheet</strong><span>Excel / Sheets cells with structure intact</span></div></div>
@@ -365,21 +568,29 @@
     <div class="container">
       <h2 class="section-title">FAQ</h2>
       <div class="faq-grid">
+        <details open>
+          <summary>Why not just use <kbd>Win+V</kbd>?</summary>
+          <p>The biggest gap is <strong>search</strong>. Windows' built-in clipboard history has no search box — once you've copied a few dozen things, finding a specific snippet means scrolling through every item by hand. It also doesn't tag entries by format, doesn't let pinned items survive the history cap, and can't be summoned by any hotkey other than <kbd>Win+V</kbd>. Clippet keeps a 200-item history, fuzzy-matches as you type, pins anything you mark indefinitely, and shows what each item is (text, RTF, HTML, image, file, spreadsheet, code) before you paste it.</p>
+        </details>
+        <details>
+          <summary>How does Clippet compare to Ditto, CopyQ, and other clipboard managers?</summary>
+          <p>Clippet is positioned as the lightweight, search-first option in a category that's otherwise dominated by feature-rich tools. <a href="https://ditto-cp.sourceforge.io/" target="_blank" rel="noopener">Ditto</a> and <a href="https://copyq.readthedocs.io/" target="_blank" rel="noopener">CopyQ</a> remain best-in-class for power users who want group hotkeys, scripting, or cross-platform parity — Clippet doesn't try to compete on those axes. <a href="https://www.clipboardfusion.com/" target="_blank" rel="noopener">ClipboardFusion</a> and <a href="https://clipclip.com/" target="_blank" rel="noopener">ClipClip</a> are great if you want macros or folder organization. Clippet's pitch is the opposite: a single sub-MB <code>.exe</code>, ~15 MB at idle, no installer, no settings panel to learn, fuzzy search the moment the popup opens. See the <a href="#alternatives">alternatives section</a> for per-tool comparisons.</p>
+        </details>
         <details>
           <summary>Why <kbd>Ctrl+Shift+V</kbd> instead of <kbd>Win+V</kbd>?</summary>
           <p>The Windows 11 shell holds <code>Win+V</code> even when clipboard history is disabled in Settings, so it can't be reliably registered by another app. <code>Ctrl+Shift+V</code> is unclaimed in stock Windows and free across most apps.</p>
         </details>
         <details>
           <summary>Does Clippet conflict with Windows' own clipboard history?</summary>
-          <p>No. They run independently. If you don't want both, disable the built-in one under Settings → System → Clipboard.</p>
+          <p>No — they run independently and most users keep both. <code>Win+V</code> still gives you the last few items at a glance; <code>Ctrl+Shift+V</code> opens Clippet's full searchable history. If you'd rather have only one, disable the built-in one under Settings → System → Clipboard.</p>
         </details>
         <details>
           <summary>Where are images stored?</summary>
-          <p>Re-encoded to PNG and base64-embedded inside <code>history.json</code>. A thumbnail is rendered inline in the popup so you can see what you're pasting before you paste it. The 200-item cap keeps the file from growing unbounded. Pinned images are exempt — be mindful when pinning very large screenshots.</p>
+          <p>Re-encoded to PNG and written as individual files under <code>%APPDATA%\Clippet\media\</code> — one full-resolution <code>{id}.png</code> per copy plus a <code>{id}_thumb.png</code> thumbnail for the listbox. Only filenames and dimensions live in <code>history.json</code>, so a 20 MB screenshot adds a few hundred bytes to the metadata file rather than ~26 MB of base64. Image bytes are streamed from disk on paste, kept off the resident heap until needed. Deleting a row removes both files; pinned images are exempt from the 200-item cap.</p>
         </details>
         <details>
           <summary>Why Rust + raw Win32 instead of a framework?</summary>
-          <p>The whole point is the sub-MB binary and the &lt; 8 MB idle footprint. A framework would add tens of MB of runtime for features Clippet doesn't need.</p>
+          <p>The whole point is the sub-MB binary and a low-double-digit-MB idle footprint (~15 MB working set, &lt; 2 MB private bytes). A framework would add tens of MB of runtime for features Clippet doesn't need.</p>
         </details>
         <details>
           <summary>Can I trust this with sensitive data?</summary>

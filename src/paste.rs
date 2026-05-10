@@ -16,6 +16,8 @@ use crate::state::{
     ClipItem, ItemType, CF_DIB, CF_HDROP, CF_TEXT, CF_UNICODETEXT, FILTERED, HISTORY, LISTBOX,
     PREV_FG, REG, SUPPRESS_NEXT_UPDATE,
 };
+use crate::storage::media_path;
+use crate::util::debug_log;
 
 /// Allocate a movable global block, copy `bytes` into it, and return
 /// the handle. On success the caller hands ownership to the clipboard
@@ -106,16 +108,33 @@ pub(crate) unsafe fn set_clipboard_from_item(hwnd: HWND, item: &ClipItem) -> boo
         // Excel, web forms, terminals all take it.
         ItemType::Spreadsheet => alloc_global(&item.raw).and_then(|hg| set_data(CF_TEXT, hg)),
         ItemType::Image => {
-            // History stores PNG when we managed to encode it; otherwise
-            // raw DIB. Detect by signature so we can hand DIB bytes back
-            // to SetClipboardData regardless.
-            let dib = if looks_like_png(&item.raw) {
-                png_to_dib(&item.raw)
-            } else {
-                Some(item.raw.clone())
-            };
-            dib.and_then(|d| alloc_global(&d))
-                .and_then(|hg| set_data(CF_DIB, hg))
+            // Image bytes live on disk under media/{media_file}; read
+            // them on demand. PNG is the common case; we still sniff
+            // the signature so a raw-DIB fallback (rare-shape DIB the
+            // capture path couldn't encode) routes correctly.
+            let bytes = item
+                .media_file
+                .as_deref()
+                .and_then(media_path)
+                .and_then(|p| std::fs::read(&p).ok());
+            match bytes {
+                Some(b) => {
+                    let dib = if looks_like_png(&b) {
+                        png_to_dib(&b)
+                    } else {
+                        Some(b)
+                    };
+                    dib.and_then(|d| alloc_global(&d))
+                        .and_then(|hg| set_data(CF_DIB, hg))
+                }
+                None => {
+                    debug_log(&format!(
+                        "Clippet: media missing for item id={} — paste skipped",
+                        item.id
+                    ));
+                    None
+                }
+            }
         }
         ItemType::File => {
             let joined = String::from_utf8_lossy(&item.raw);

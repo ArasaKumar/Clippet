@@ -6,7 +6,7 @@
 
 **The Windows 11 clipboard manager that respects your machine.**
 
-A native, single-binary clipboard history utility for Windows 11. Built in Rust on the Win32 API directly — no Electron, no web view, no background services, no telemetry. Under 8 MB of RAM at idle. Your clipboard never leaves your computer.
+A native, single-binary clipboard history utility for Windows 11. Built in Rust on the Win32 API directly — no Electron, no web view, no background services, no telemetry. Around 15 MB of RAM at idle (working set; private bytes under 2 MB), with image payloads streamed from disk so the footprint stays bounded. Your clipboard never leaves your computer.
 
 [![Platform: Windows 11](https://img.shields.io/badge/platform-Windows%2011-0078D4)](#requirements)
 [![Built with Rust](https://img.shields.io/badge/built%20with-Rust-CE422B)](https://rust-lang.org)
@@ -22,7 +22,9 @@ A native, single-binary clipboard history utility for Windows 11. Built in Rust 
 
 ## Why Clippet
 
-Windows 11's built-in clipboard history (`Win+V`) is fine — until you need it to remember more than a few items, survive a reboot, paste an image with the same fidelity Word saved it with, or stay out of the cloud. Clippet does all of that in a single executable you can drop anywhere.
+Windows 11's built-in clipboard history (`Win+V`) has **no search box** — once your history grows past a screenful, finding the snippet you copied an hour ago means scrolling through every item by hand. Clippet adds fuzzy search across every entry, unlimited pinned items that survive the history cap, and high-fidelity paste-back for RTF / HTML / images / files, all in a single executable you can drop anywhere.
+
+It's also a free, native, no-installer alternative to **Ditto**, **CopyQ**, **ClipboardFusion**, **ClipClip**, **Pasteboard**, **Clipboard Master**, **ClipMate**, **Clipdiary**, and **PastePilot**. See [Coming from another clipboard manager?](#coming-from-another-clipboard-manager) below for per-tool comparisons.
 
 | | Clippet | Win+V (built-in) | Electron-based managers |
 |---|:---:|:---:|:---:|
@@ -31,9 +33,21 @@ Windows 11's built-in clipboard history (`Win+V`) is fine — until you need it 
 | Rich content (RTF, HTML, images, files) | ✅ | Partial | Varies |
 | Pin items past the history cap | ✅ | ❌ | Varies |
 | Fuzzy search across history | ✅ | ❌ | Varies |
-| Idle memory footprint | < 8 MB | n/a | 100 – 400 MB |
+| Idle memory footprint | ~15 MB | n/a | 100 – 400 MB |
 | Distribution | One `.exe` | OS-bundled | Installer + updater |
 | Network access | None | Cloud sync optional | Often required |
+
+## Coming from another clipboard manager?
+
+Clippet is a free, native alternative to most of the clipboard managers people land on when shopping around. Each excels at something — here's what tilts the choice toward Clippet.
+
+- **Switching from [Ditto](https://ditto-cp.sourceforge.io/)?** Ditto is the gold standard of free Windows clipboard managers — battle-tested MFC, group/hotkey assignments, encrypted sync. Clippet trades those assignments for a tighter binary, modern Win11 chrome (acrylic, rounded corners, light/dark theme tracking), and a fuzzy search that highlights matches as you type. Both are open source.
+- **Switching from [CopyQ](https://copyq.readthedocs.io/)?** CopyQ's scripting, tabs, and cross-platform support are unmatched if you live in your clipboard. Clippet is the opposite philosophy: no scripting, no tabs, no Qt runtime — just a search-first popup on `Ctrl+Shift+V` that gets out of your way. ~15 MB resident vs CopyQ's ~50 MB.
+- **Switching from [ClipClip](https://clipclip.com/)?** ClipClip organizes clips into folders, which is great for boilerplate. Clippet skips folders in favor of fuzzy search across everything — typing two characters of any clip is faster than navigating a folder tree once your library grows. No account, no telemetry.
+- **Switching from [ClipboardFusion](https://www.clipboardfusion.com/)?** ClipboardFusion's Pro tier offers C# / VB macros and cross-device sync. Clippet is free forever, has no Pro tier, and doesn't sync — your clipboard never leaves the machine. If you need macros, stay with ClipboardFusion. If you don't, Clippet's < 2 MB private memory footprint is hard to beat.
+- **Switching from [Pasteboard](https://www.pasteboard.app/) or [PastePilot](https://paste-pilot.netlify.app/)?** Both are modern paid Windows clipboard managers with polished UIs. Clippet matches the polish (Win11 acrylic, custom title bar, fuzzy match highlights) and ships as a single free `.exe`. No subscription, no account, no telemetry. Source is public domain.
+- **Switching from Clipboard Master, ClipMate, or Clipdiary?** Solid classics, but their UIs predate Win11's design language and they install with traditional setup wizards. Clippet drops in as a single `.exe`, paints native Win11 chrome (acrylic, rounded corners, DPI-aware), and lives in the system tray. No installer, no admin elevation.
+- **Coming from `Win+V`?** Windows 11's built-in clipboard history is fine for the last few items at a glance, but it has no search box, caps the history at ~25 items, and doesn't let pinned items survive past the cap. Clippet adds fuzzy search across 200 items, unlimited pinning, per-format type tags, and IDE-aware code detection. Both can run side by side.
 
 ## Features
 
@@ -191,17 +205,23 @@ Per-level design notes are under [docs/](docs/); the master roadmap is in [PLAN.
 
 ## FAQ
 
+**Why not just use Win+V?**
+The biggest gap is **search**. Windows' built-in clipboard history has no search box — once you've copied a few dozen things, finding a specific snippet means scrolling through every item by hand. It also doesn't tag entries by format, doesn't let pinned items survive the history cap, and can't be summoned by any hotkey other than `Win+V`. Clippet keeps a 200-item history, fuzzy-matches as you type, pins anything you mark indefinitely, and shows what each item is (text, RTF, HTML, image, file, spreadsheet, code) before you paste it.
+
+**How does Clippet compare to Ditto, CopyQ, and other clipboard managers?**
+Clippet is positioned as the lightweight, search-first option in a category dominated by feature-rich tools. [Ditto](https://ditto-cp.sourceforge.io/) and [CopyQ](https://copyq.readthedocs.io/) remain best-in-class for power users who want group hotkeys, scripting, or cross-platform parity — Clippet doesn't try to compete on those axes. [ClipboardFusion](https://www.clipboardfusion.com/) and [ClipClip](https://clipclip.com/) are great if you want macros or folder organization. Clippet's pitch is the opposite: a single sub-MB `.exe`, ~15 MB at idle, no installer, no settings panel to learn, fuzzy search the moment the popup opens. See [Coming from another clipboard manager?](#coming-from-another-clipboard-manager) above for per-tool comparisons.
+
 **Why Ctrl+Shift+V instead of Win+V?**
 The Windows 11 shell holds `Win+V` even when clipboard history is disabled in Settings, so we can't reliably register it. `Ctrl+Shift+V` is unclaimed in stock Windows and free across most apps.
 
 **Does Clippet conflict with Windows' own clipboard history?**
-No. They run independently. If you don't want both, disable the built-in one under *Settings → System → Clipboard*.
+No — they run independently and most users keep both. `Win+V` still gives you the last few items at a glance; `Ctrl+Shift+V` opens Clippet's full searchable history. If you'd rather have only one, disable the built-in one under *Settings → System → Clipboard*.
 
 **Where are images stored?**
-Re-encoded to PNG and base64-embedded inside `history.json`. A thumbnail is rendered inline in the popup so you can identify the image before pasting. The 200-item cap keeps the file from growing unbounded; pinned images are exempt, so be mindful when pinning very large screenshots.
+Re-encoded to PNG and written as individual files under `%APPDATA%\Clippet\media\` — one full-resolution `{id}.png` per copy plus a `{id}_thumb.png` thumbnail for the listbox. Only filenames and dimensions live in `history.json`, so a 20 MB screenshot adds a few hundred bytes to the metadata file rather than ~26 MB of base64. Image bytes are streamed from disk on paste, kept off the resident heap until needed. Deleting a row removes both files; pinned images are exempt from the 200-item cap.
 
 **Why Rust + raw Win32 instead of a framework?**
-The whole point is the single sub-MB binary and the < 8 MB idle footprint. A framework would add tens of MB of runtime for features Clippet doesn't need.
+The whole point is the single sub-MB binary and the low-double-digit-MB idle footprint (~15 MB working set, < 2 MB private bytes). A framework would add tens of MB of runtime for features Clippet doesn't need.
 
 **Can I trust this with sensitive data?**
 The same trust you give any local app that reads your clipboard. Clippet writes to a per-user AppData file that other users on the machine can't read. Source is public domain — audit it.
