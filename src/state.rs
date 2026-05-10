@@ -42,7 +42,7 @@ pub(crate) const LBS_OWNERDRAWVARIABLE_BIT: u32 = 0x0020;
 pub(crate) const POPUP_W: i32 = 400;
 pub(crate) const POPUP_H: i32 = 500;
 pub(crate) const POPUP_MIN_W: i32 = 280;
-pub(crate) const POPUP_MIN_H: i32 = 200;
+pub(crate) const POPUP_MIN_H: i32 = 280;
 pub(crate) const HOTKEY_ID: i32 = 1;
 
 // ---------------------------------------------------------------------
@@ -64,6 +64,7 @@ pub(crate) const IDM_OPEN: u32 = 100;
 pub(crate) const IDM_CLEAR: u32 = 101;
 pub(crate) const IDM_SETTINGS: u32 = 102;
 pub(crate) const IDM_EXIT: u32 = 103;
+pub(crate) const IDM_ABOUT: u32 = 104;
 
 // ---------------------------------------------------------------------
 // Search (Level 6).
@@ -104,6 +105,14 @@ pub(crate) const CLOSE_BTN_H: i32 = 40;
 pub(crate) const TITLE_PAD_X: i32 = 12;
 pub(crate) const CLOSE_BTN_SUBCLASS_ID: usize = 0xC2;
 pub(crate) const RESIZE_MARGIN: i32 = 6;
+
+// ---------------------------------------------------------------------
+// Bottom footer bar — separator + action rows (Level 7+).
+// ---------------------------------------------------------------------
+
+pub(crate) const FOOTER_HEIGHT: i32 = 121; // 1px separator + 4 × 30px rows
+pub(crate) const FOOTER_ITEM_H: i32 = 30;
+pub(crate) const FOOTER_PAD_X: i32 = 14;
 // Win11 close-button hover red ≈ #C42B1C (BGR for COLORREF).
 pub(crate) const CLOSE_HOT_BG: u32 = 0x001C2BC4;
 pub(crate) const CLOSE_HOT_TEXT: u32 = 0x00FFFFFF;
@@ -303,6 +312,12 @@ thread_local! {
     /// User-resized popup size — kept in memory during the session;
     /// flushed to settings.json on hide so it survives restarts.
     pub(crate) static POPUP_SIZE: Cell<(i32, i32)> = const { Cell::new((POPUP_W, POPUP_H)) };
+    /// Which footer row (0‥3) the mouse is currently hovering over; -1
+    /// means no row is highlighted.
+    pub(crate) static FOOTER_HOT_ITEM: Cell<i32> = const { Cell::new(-1) };
+    /// True while TrackMouseEvent(TME_LEAVE) is armed for the popup so we
+    /// don't re-arm it on every WM_MOUSEMOVE.
+    pub(crate) static FOOTER_TRACKING: Cell<bool> = const { Cell::new(false) };
 }
 
 pub(crate) static NEXT_ID: AtomicU64 = AtomicU64::new(1);
