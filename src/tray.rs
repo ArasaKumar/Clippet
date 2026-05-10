@@ -270,6 +270,19 @@ pub(crate) unsafe fn show_settings_stub(hwnd: HWND) {
     );
 }
 
+/// SAFETY: shows a MessageBoxW; no other state is touched.
+pub(crate) unsafe fn show_about(hwnd: HWND) {
+    show_msgbox(
+        hwnd,
+        "About Clippet",
+        "Clippet v0.1.0\n\n\
+         Native Windows 11 clipboard manager.\n\
+         Built with Rust + windows-rs.\n\n\
+         Global hotkey: Ctrl+Shift+V",
+        MB_OK | MB_ICONINFORMATION,
+    );
+}
+
 // =====================================================================
 // Autostart prompt (first launch only).
 // =====================================================================

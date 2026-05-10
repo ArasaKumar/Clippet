@@ -17,6 +17,7 @@
 //! modules below.
 
 mod clipboard;
+mod footer;
 mod listbox;
 mod paste;
 mod search;
@@ -34,7 +35,10 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::DataExchange::*;
 use windows::Win32::System::LibraryLoader::*;
-use windows::Win32::UI::Controls::{DRAWITEMSTRUCT, EM_SETCUEBANNER, MEASUREITEMSTRUCT};
+use windows::Win32::UI::Controls::{
+    DRAWITEMSTRUCT, EM_SETCUEBANNER, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx,
+    MEASUREITEMSTRUCT, WM_MOUSELEAVE,
+};
 use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -47,13 +51,13 @@ use crate::listbox::{
 use crate::paste::activate_selected;
 use crate::search::{push_item, refresh_listbox, update_filter};
 use crate::state::{
-    BG_BRUSH, BOLD_FONT, CLOSE_BTN_ID, EDIT_ID, EN_CHANGE_CODE, HISTORY, HOTKEY_ID, IDM_CLEAR,
-    IDM_EXIT, IDM_OPEN, IDM_SETTINGS, IS_DARK, LISTBOX, LISTBOX_ID, NEXT_ID, PALETTE, POPUP_H,
-    POPUP_MIN_H, POPUP_MIN_W, POPUP_SIZE, POPUP_W, PREV_FG, RESIZE_MARGIN, SEARCH, SEARCH_BG_BRUSH,
-    SEARCH_BOTTOM_GAP, SEARCH_EDIT_RIGHT_PAD, SEARCH_EDIT_VERT_INSET, SEARCH_HEIGHT,
-    SEARCH_ICON_LEFT_PAD, SEARCH_ICON_RIGHT_GAP, SEARCH_ICON_SIZE, SEARCH_INSET, SEARCH_TOP_GAP,
-    SELF_HWND, SEL_BRUSH, SUPPRESS_NEXT_UPDATE, TITLEBAR_HEIGHT, TITLE_FONT, TITLE_LABEL, UI_FONT,
-    WM_APP_TRAY,
+    BG_BRUSH, BOLD_FONT, CLOSE_BTN_ID, EDIT_ID, EN_CHANGE_CODE, FOOTER_HEIGHT, FOOTER_HOT_ITEM,
+    FOOTER_TRACKING, HISTORY, HOTKEY_ID, IDM_ABOUT, IDM_CLEAR, IDM_EXIT, IDM_OPEN, IDM_SETTINGS,
+    IS_DARK, LISTBOX, LISTBOX_ID, NEXT_ID, PALETTE, POPUP_H, POPUP_MIN_H, POPUP_MIN_W, POPUP_SIZE,
+    POPUP_W, PREV_FG, RESIZE_MARGIN, SEARCH, SEARCH_BG_BRUSH, SEARCH_BOTTOM_GAP,
+    SEARCH_EDIT_RIGHT_PAD, SEARCH_EDIT_VERT_INSET, SEARCH_HEIGHT, SEARCH_ICON_LEFT_PAD,
+    SEARCH_ICON_RIGHT_GAP, SEARCH_ICON_SIZE, SEARCH_INSET, SEARCH_TOP_GAP, SELF_HWND, SEL_BRUSH,
+    SUPPRESS_NEXT_UPDATE, TITLEBAR_HEIGHT, TITLE_FONT, TITLE_LABEL, UI_FONT, WM_APP_TRAY,
 };
 use crate::storage::{load_history, load_settings};
 use crate::theme::{
@@ -64,7 +68,7 @@ use crate::titlebar::{
 };
 use crate::tray::{
     add_tray_icon, clear_history, load_app_icon, maybe_prompt_autostart, persist_popup_size,
-    remove_tray_icon, show_popup, show_settings_stub, show_tray_menu, toggle_popup,
+    remove_tray_icon, show_about, show_popup, show_settings_stub, show_tray_menu, toggle_popup,
     update_tray_tooltip,
 };
 use crate::util::show_msgbox;
@@ -140,6 +144,9 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 );
             }
             BOLD_FONT.with(|c| c.set(make_bold_font_from(lb)));
+            // Footer button tooltips. Creates the tooltips_class32
+            // control once; per-button rects are pushed in WM_SIZE.
+            let _ = footer::create_tooltip(hwnd);
             register_formats();
             let _ = AddClipboardFormatListener(hwnd);
             // Ctrl+Shift+V global hotkey. If another app already holds
@@ -291,13 +298,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_PAINT => {
             // Children paint themselves; the parent owns the title-bar
-            // strip and the rounded surface + magnifying-glass icon
-            // behind the search EDIT. The window class brush has already
-            // erased the rest of the client area to the popup bg.
+            // strip, the rounded search-chrome, and the bottom footer bar.
             let mut ps = PAINTSTRUCT::default();
             let hdc = BeginPaint(hwnd, &mut ps);
             paint_titlebar_bg(hwnd, hdc);
             paint_search_chrome(hwnd, hdc);
+            footer::paint(hwnd, hdc);
             let _ = EndPaint(hwnd, &ps);
             LRESULT(0)
         }
@@ -333,10 +339,79 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     IDM_OPEN => show_popup(hwnd),
                     IDM_CLEAR => clear_history(hwnd),
                     IDM_SETTINGS => show_settings_stub(hwnd),
+                    IDM_ABOUT => show_about(hwnd),
                     IDM_EXIT => {
                         let _ = DestroyWindow(hwnd);
                     }
                     _ => {}
+                }
+            }
+            LRESULT(0)
+        }
+        WM_LBUTTONDOWN => {
+            // Forward clicks inside the footer area to the appropriate command.
+            let x = (lp.0 as u32 & 0xFFFF) as i16 as i32;
+            let y = ((lp.0 as u32 >> 16) & 0xFFFF) as i16 as i32;
+            let mut rc = RECT::default();
+            if GetClientRect(hwnd, &mut rc).is_ok() {
+                match footer::hit_test(rc.right, rc.bottom, x, y) {
+                    0 => clear_history(hwnd),
+                    1 => show_settings_stub(hwnd),
+                    2 => show_about(hwnd),
+                    3 => { let _ = DestroyWindow(hwnd); }
+                    _ => {}
+                }
+            }
+            LRESULT(0)
+        }
+        WM_MOUSEMOVE => {
+            // Update footer hover state and arm leave-tracking if needed.
+            let x = (lp.0 as u32 & 0xFFFF) as i16 as i32;
+            let y = ((lp.0 as u32 >> 16) & 0xFFFF) as i16 as i32;
+            let mut rc = RECT::default();
+            if GetClientRect(hwnd, &mut rc).is_ok() {
+                let new_hot = footer::hit_test(rc.right, rc.bottom, x, y);
+                let old_hot = FOOTER_HOT_ITEM.with(|c| c.get());
+                if new_hot != old_hot {
+                    FOOTER_HOT_ITEM.with(|c| c.set(new_hot));
+                    let footer_top = rc.bottom - FOOTER_HEIGHT;
+                    let dirty = RECT {
+                        left: rc.left,
+                        top: footer_top,
+                        right: rc.right,
+                        bottom: rc.bottom,
+                    };
+                    let _ = InvalidateRect(hwnd, Some(&dirty), false);
+                }
+            }
+            // Arm TME_LEAVE once per entry so WM_MOUSELEAVE fires when
+            // the cursor exits the popup window rectangle.
+            if !FOOTER_TRACKING.with(|c| c.get()) {
+                FOOTER_TRACKING.with(|c| c.set(true));
+                let mut tme = TRACKMOUSEEVENT {
+                    cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                    dwFlags: TME_LEAVE,
+                    hwndTrack: hwnd,
+                    dwHoverTime: 0,
+                };
+                let _ = TrackMouseEvent(&mut tme);
+            }
+            DefWindowProcW(hwnd, msg, wp, lp)
+        }
+        WM_MOUSELEAVE => {
+            FOOTER_TRACKING.with(|c| c.set(false));
+            if FOOTER_HOT_ITEM.with(|c| c.get()) >= 0 {
+                FOOTER_HOT_ITEM.with(|c| c.set(-1));
+                let mut rc = RECT::default();
+                if GetClientRect(hwnd, &mut rc).is_ok() {
+                    let footer_top = rc.bottom - FOOTER_HEIGHT;
+                    let dirty = RECT {
+                        left: rc.left,
+                        top: footer_top,
+                        right: rc.right,
+                        bottom: rc.bottom,
+                    };
+                    let _ = InvalidateRect(hwnd, Some(&dirty), false);
                 }
             }
             LRESULT(0)
@@ -417,9 +492,13 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 let lb = *lb.borrow();
                 if !lb.0.is_null() {
                     let top = wrap_top + SEARCH_HEIGHT + SEARCH_BOTTOM_GAP;
-                    let _ = SetWindowPos(lb, None, 0, top, w, (h - top).max(0), SWP_NOZORDER);
+                    let lb_h = (h - top - FOOTER_HEIGHT).max(0);
+                    let _ = SetWindowPos(lb, None, 0, top, w, lb_h, SWP_NOZORDER);
                 }
             });
+            // Refresh tooltip rectangles so the per-button hover targets
+            // track the new layout after a resize.
+            footer::update_tooltip_rects(hwnd, w, h);
             LRESULT(0)
         }
         WM_DESTROY => {
@@ -484,6 +563,16 @@ fn main() -> Result<()> {
         // Per-monitor DPI v2 keeps cursor coords and window placement
         // in the same coordinate space across mixed-DPI displays.
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+        // Load comctl32 and register the tooltip / toolbar / status-bar
+        // window classes. The footer's hover tooltips need this — without
+        // it, the "tooltips_class32" CreateWindowExW would fail. ICC_BAR_CLASSES
+        // is the umbrella flag that covers the tooltip control.
+        let icc = INITCOMMONCONTROLSEX {
+            dwSize: std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32,
+            dwICC: ICC_BAR_CLASSES,
+        };
+        let _ = InitCommonControlsEx(&icc);
 
         // Detect light vs dark from AppsUseLightTheme and cache the
         // palette before we register the window class — the class's

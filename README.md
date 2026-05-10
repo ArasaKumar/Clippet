@@ -67,6 +67,7 @@ Star an item to pin it. Pinned entries sort above the rest, survive the 200-item
 
 - Acrylic backdrop and rounded corners via DWM (`DWMSBT_TRANSIENTWINDOW`, `DWMWCP_ROUND`)
 - Custom flat title bar that matches the system clipboard panel
+- Compact icon footer for quick actions (Clear History, Settings, About, Quit) with hover tooltips and per-action accent colours
 - Per-monitor DPI v2 — sharp on mixed-DPI setups
 - Light / dark palette tracked from `AppsUseLightTheme`
 - Segoe UI Variable for body, semibold heading on the title bar

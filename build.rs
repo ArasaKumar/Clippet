@@ -15,6 +15,7 @@ const SS: u32 = 4; // supersample factor for antialiasing
 
 fn main() {
     println!("cargo:rerun-if-changed=assets/clippet.svg");
+    println!("cargo:rerun-if-changed=assets/clippet.manifest");
     println!("cargo:rerun-if-changed=build.rs");
 
     let out_dir = PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR not set"));
@@ -31,10 +32,23 @@ fn main() {
     let ico_bytes = pack_ico(&entries);
     fs::write(&ico_path, &ico_bytes).expect("write clippet.ico");
 
-    // RC syntax: `<NAME> ICON "<path>"`. The literal name is what
-    // LoadIconW(hinst, w!("clippet")) matches at runtime.
+    // Application manifest. `1 24 "..."` embeds the file as the standard
+    // Win32 application manifest resource (RT_MANIFEST = 24, ID 1 for an
+    // .exe). It opts the process into Common Controls v6 — without that,
+    // comctl32 v5 loads instead and the v6-sized TTTOOLINFOW we hand to
+    // TTM_ADDTOOLW silently fails to register, killing tooltips.
+    let manifest_src = PathBuf::from("assets/clippet.manifest");
+    let manifest_dest = out_dir.join("clippet.manifest");
+    fs::copy(&manifest_src, &manifest_dest).expect("copy clippet.manifest");
+
+    // RC syntax: `<NAME> ICON "<path>"`. The literal "clippet" name is
+    // what LoadIconW(hinst, w!("clippet")) matches at runtime.
     let ico_path_str = ico_path.to_string_lossy().replace('\\', "\\\\");
-    let rc = format!("clippet ICON \"{}\"\n", ico_path_str);
+    let manifest_path_str = manifest_dest.to_string_lossy().replace('\\', "\\\\");
+    let rc = format!(
+        "clippet ICON \"{}\"\n1 24 \"{}\"\n",
+        ico_path_str, manifest_path_str
+    );
     fs::write(&rc_path, rc).expect("write clippet.rc");
 
     embed_resource::compile(&rc_path, embed_resource::NONE);
