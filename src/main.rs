@@ -552,8 +552,21 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
 fn main() -> Result<()> {
     // Load persisted history before the window exists so WM_CREATE's
     // refresh_listbox() call sees the restored items.
-    let (loaded, next_id) = load_history();
+    let (mut loaded, next_id) = load_history();
     NEXT_ID.store(next_id.max(1), Ordering::Relaxed);
+    // One-shot repair sweep: older builds couldn't encode BI_BITFIELDS
+    // DIBs to PNG, so screenshots from Snipping Tool etc. ended up as
+    // raw DIB on disk with no thumbnail. Walk the image items and rebuild
+    // any missing on-disk artifacts so the listbox can render real thumbs.
+    let mut any_repaired = false;
+    for item in loaded.iter_mut() {
+        if crate::clipboard::repair_image_storage_if_needed(item) {
+            any_repaired = true;
+        }
+    }
+    if any_repaired {
+        crate::storage::save_history(&loaded);
+    }
     HISTORY.with(|h| *h.borrow_mut() = loaded);
 
     // SAFETY: every call inside this block is a documented Win32 API.

@@ -13,7 +13,7 @@ use windows::Win32::UI::Controls::{DRAWITEMSTRUCT, MEASUREITEMSTRUCT};
 use windows::Win32::UI::Shell::{DefSubclassProc, RemoveWindowSubclass, SetWindowSubclass};
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use crate::clipboard::{looks_like_png, png_to_dib};
+use crate::clipboard::{decode_dib_to_bgra, looks_like_png, png_to_dib};
 use crate::paste::{activate_selected, set_clipboard_from_item};
 use crate::search::{refresh_listbox, row_to_hist};
 use crate::state::{
@@ -275,137 +275,6 @@ fn decode_to_bgra(raw: &[u8]) -> Option<(Vec<u8>, i32, i32)> {
         return Some((pixels, w, h));
     }
     decode_dib_to_bgra(raw)
-}
-
-fn decode_dib_to_bgra(dib: &[u8]) -> Option<(Vec<u8>, i32, i32)> {
-    if dib.len() < 40 {
-        return None;
-    }
-    let bi_size = u32::from_le_bytes(dib[0..4].try_into().ok()?) as usize;
-    if bi_size < 40 || dib.len() < bi_size {
-        return None;
-    }
-    let width = i32::from_le_bytes(dib[4..8].try_into().ok()?);
-    let height_signed = i32::from_le_bytes(dib[8..12].try_into().ok()?);
-    let planes = u16::from_le_bytes(dib[12..14].try_into().ok()?);
-    let bitcount = u16::from_le_bytes(dib[14..16].try_into().ok()?);
-    let compression = u32::from_le_bytes(dib[16..20].try_into().ok()?);
-    if width <= 0 || height_signed == 0 || planes != 1 {
-        return None;
-    }
-    let abs_h = height_signed.unsigned_abs() as usize;
-    let w_usize = width as usize;
-    // Positive biHeight = bottom-up DIB; we emit top-down so the consumer
-    // (CreateDIBSection here) doesn't need to know which it was.
-    let bottom_up = height_signed > 0;
-    let out_stride = w_usize.checked_mul(4)?;
-    let out_size = out_stride.checked_mul(abs_h)?;
-    let mut out = vec![0u8; out_size];
-
-    if compression == 3 && bitcount == 32 {
-        let masks_offset = bi_size;
-        if dib.len() < masks_offset + 12 {
-            return None;
-        }
-        let red_mask =
-            u32::from_le_bytes(dib[masks_offset..masks_offset + 4].try_into().ok()?);
-        let green_mask =
-            u32::from_le_bytes(dib[masks_offset + 4..masks_offset + 8].try_into().ok()?);
-        let blue_mask =
-            u32::from_le_bytes(dib[masks_offset + 8..masks_offset + 12].try_into().ok()?);
-        let pixels_off = masks_offset + 12;
-        if dib.len() < pixels_off + out_size {
-            return None;
-        }
-        let pixels = &dib[pixels_off..pixels_off + out_size];
-
-        for y in 0..abs_h {
-            let src_y = if bottom_up { abs_h - 1 - y } else { y };
-            let src_row = &pixels[src_y * out_stride..src_y * out_stride + out_stride];
-            let dst_row = &mut out[y * out_stride..y * out_stride + out_stride];
-            for (i, chunk) in src_row.chunks_exact(4).enumerate() {
-                let value = u32::from_le_bytes(chunk.try_into().ok()?);
-                let r = normalize_bitfield_component(value, red_mask)?;
-                let g = normalize_bitfield_component(value, green_mask)?;
-                let b = normalize_bitfield_component(value, blue_mask)?;
-                let dst = &mut dst_row[i * 4..i * 4 + 4];
-                dst[0] = b;
-                dst[1] = g;
-                dst[2] = r;
-                dst[3] = 0xFF;
-            }
-        }
-        return Some((out, width, abs_h as i32));
-    }
-
-    if compression != 0 {
-        return None;
-    }
-    if bitcount != 24 && bitcount != 32 {
-        return None;
-    }
-
-    // Source stride is 4-byte aligned per BMP spec.
-    let src_stride = match bitcount {
-        32 => w_usize.checked_mul(4)?,
-        24 => (w_usize.checked_mul(3)? + 3) & !3usize,
-        _ => unreachable!(),
-    };
-    let src_size = src_stride.checked_mul(abs_h)?;
-    if dib.len() < bi_size + src_size {
-        return None;
-    }
-    let pixels = &dib[bi_size..bi_size + src_size];
-
-    for y in 0..abs_h {
-        let src_y = if bottom_up { abs_h - 1 - y } else { y };
-        let src_row = &pixels[src_y * src_stride..src_y * src_stride + src_stride];
-        let dst_row = &mut out[y * out_stride..y * out_stride + out_stride];
-        match bitcount {
-            32 => {
-                for x in 0..w_usize {
-                    let s = &src_row[x * 4..x * 4 + 4];
-                    let d = &mut dst_row[x * 4..x * 4 + 4];
-                    d[0] = s[0];
-                    d[1] = s[1];
-                    d[2] = s[2];
-                    // BI_RGB 32bpp leaves the alpha byte undefined.
-                    d[3] = 0xFF;
-                }
-            }
-            24 => {
-                for x in 0..w_usize {
-                    let s = &src_row[x * 3..x * 3 + 3];
-                    let d = &mut dst_row[x * 4..x * 4 + 4];
-                    d[0] = s[0];
-                    d[1] = s[1];
-                    d[2] = s[2];
-                    d[3] = 0xFF;
-                }
-            }
-            _ => unreachable!(),
-        }
-    }
-    Some((out, width, abs_h as i32))
-}
-
-fn normalize_bitfield_component(value: u32, mask: u32) -> Option<u8> {
-    if mask == 0 {
-        return Some(0);
-    }
-    let shift = mask.trailing_zeros();
-    let bits = mask >> shift;
-    // Reject non-contiguous masks: bits must be of the form 0b0..01..1.
-    if bits == 0 || bits & (bits + 1) != 0 {
-        return None;
-    }
-    let raw = (value & mask) >> shift;
-    let width = bits.count_ones();
-    if width == 8 {
-        return Some(raw as u8);
-    }
-    let max = (1u32 << width) - 1;
-    Some(((raw * 255 + (max / 2)) / max) as u8)
 }
 
 /// SAFETY: caller passes a screen-compatible HDC; CreateDIBSection +

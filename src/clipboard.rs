@@ -39,75 +39,160 @@ pub(crate) fn looks_like_png(bytes: &[u8]) -> bool {
 }
 
 pub(crate) fn dib_to_png(dib: &[u8]) -> Option<Vec<u8>> {
+    let (mut pixels, w, h) = decode_dib_to_bgra(dib)?;
+    // Shared decoder emits BGRA; PNG encoder wants RGBA — swap in place.
+    for px in pixels.chunks_exact_mut(4) {
+        px.swap(0, 2);
+    }
+    let mut out: Vec<u8> = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, w as u32, h as u32);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut writer = enc.write_header().ok()?;
+        writer.write_image_data(&pixels).ok()?;
+    }
+    Some(out)
+}
+
+/// Decode any supported clipboard DIB (`BI_RGB` 24/32bpp or `BI_BITFIELDS`
+/// 32bpp, with any header size ≥ 40 — V4/V5 included) to top-down 32bpp
+/// BGRA pixels. Returns `(pixels, width, height)` or `None` if the DIB
+/// shape isn't one we can decode.
+///
+/// Shared between the capture path (`dib_to_png`) and the listbox thumb
+/// renderer so both sites stay in sync — historically the listbox decoder
+/// supported BI_BITFIELDS but `dib_to_png` didn't, so modern Snipping-Tool
+/// captures ended up stored as raw DIB on disk and never got a thumbnail.
+pub(crate) fn decode_dib_to_bgra(dib: &[u8]) -> Option<(Vec<u8>, i32, i32)> {
     if dib.len() < 40 {
         return None;
     }
-    let bi_size = u32::from_le_bytes([dib[0], dib[1], dib[2], dib[3]]) as usize;
-    let width = i32::from_le_bytes([dib[4], dib[5], dib[6], dib[7]]);
-    let height = i32::from_le_bytes([dib[8], dib[9], dib[10], dib[11]]);
-    let planes = u16::from_le_bytes([dib[12], dib[13]]);
-    let bitcount = u16::from_le_bytes([dib[14], dib[15]]);
-    let compression = u32::from_le_bytes([dib[16], dib[17], dib[18], dib[19]]);
+    let bi_size = u32::from_le_bytes(dib[0..4].try_into().ok()?) as usize;
+    if bi_size < 40 || dib.len() < bi_size {
+        return None;
+    }
+    let width = i32::from_le_bytes(dib[4..8].try_into().ok()?);
+    let height_signed = i32::from_le_bytes(dib[8..12].try_into().ok()?);
+    let planes = u16::from_le_bytes(dib[12..14].try_into().ok()?);
+    let bitcount = u16::from_le_bytes(dib[14..16].try_into().ok()?);
+    let compression = u32::from_le_bytes(dib[16..20].try_into().ok()?);
+    if width <= 0 || height_signed == 0 || planes != 1 {
+        return None;
+    }
+    let abs_h = height_signed.unsigned_abs() as usize;
+    let w_usize = width as usize;
+    // Positive biHeight = bottom-up DIB; we emit top-down so the consumer
+    // (CreateDIBSection / png encoder) doesn't need to know which it was.
+    let bottom_up = height_signed > 0;
+    let out_stride = w_usize.checked_mul(4)?;
+    let out_size = out_stride.checked_mul(abs_h)?;
+    let mut out = vec![0u8; out_size];
 
-    if compression != 0 || planes != 1 || (bitcount != 24 && bitcount != 32) {
+    if compression == 3 && bitcount == 32 {
+        let masks_offset = bi_size;
+        if dib.len() < masks_offset + 12 {
+            return None;
+        }
+        let red_mask =
+            u32::from_le_bytes(dib[masks_offset..masks_offset + 4].try_into().ok()?);
+        let green_mask =
+            u32::from_le_bytes(dib[masks_offset + 4..masks_offset + 8].try_into().ok()?);
+        let blue_mask =
+            u32::from_le_bytes(dib[masks_offset + 8..masks_offset + 12].try_into().ok()?);
+        let pixels_off = masks_offset + 12;
+        if dib.len() < pixels_off + out_size {
+            return None;
+        }
+        let pixels = &dib[pixels_off..pixels_off + out_size];
+
+        for y in 0..abs_h {
+            let src_y = if bottom_up { abs_h - 1 - y } else { y };
+            let src_row = &pixels[src_y * out_stride..src_y * out_stride + out_stride];
+            let dst_row = &mut out[y * out_stride..y * out_stride + out_stride];
+            for (i, chunk) in src_row.chunks_exact(4).enumerate() {
+                let value = u32::from_le_bytes(chunk.try_into().ok()?);
+                let r = normalize_bitfield_component(value, red_mask)?;
+                let g = normalize_bitfield_component(value, green_mask)?;
+                let b = normalize_bitfield_component(value, blue_mask)?;
+                let dst = &mut dst_row[i * 4..i * 4 + 4];
+                dst[0] = b;
+                dst[1] = g;
+                dst[2] = r;
+                dst[3] = 0xFF;
+            }
+        }
+        return Some((out, width, abs_h as i32));
+    }
+
+    if compression != 0 {
         return None;
     }
-    if bi_size < 40 || width <= 0 || height == 0 {
+    if bitcount != 24 && bitcount != 32 {
         return None;
     }
-    let w = width as usize;
-    let abs_h = height.unsigned_abs() as usize;
-    let stride = match bitcount {
-        32 => w * 4,
-        24 => (w * 3).div_ceil(4) * 4,
+
+    // Source stride is 4-byte aligned per BMP spec.
+    let src_stride = match bitcount {
+        32 => w_usize.checked_mul(4)?,
+        24 => (w_usize.checked_mul(3)? + 3) & !3usize,
         _ => unreachable!(),
     };
-    let pixels_offset = bi_size; // 24/32bpp BI_RGB has no color table
-    let pixels_size = stride.checked_mul(abs_h)?;
-    if dib.len() < pixels_offset + pixels_size {
+    let src_size = src_stride.checked_mul(abs_h)?;
+    if dib.len() < bi_size + src_size {
         return None;
     }
-    let pixels = &dib[pixels_offset..pixels_offset + pixels_size];
-    let bottom_up = height > 0;
+    let pixels = &dib[bi_size..bi_size + src_size];
 
-    let mut rgba = Vec::with_capacity(w * abs_h * 4);
     for y in 0..abs_h {
         let src_y = if bottom_up { abs_h - 1 - y } else { y };
-        let row = &pixels[src_y * stride..src_y * stride + stride];
+        let src_row = &pixels[src_y * src_stride..src_y * src_stride + src_stride];
+        let dst_row = &mut out[y * out_stride..y * out_stride + out_stride];
         match bitcount {
             32 => {
-                for px in row.chunks_exact(4).take(w) {
-                    rgba.push(px[2]); // R
-                    rgba.push(px[1]); // G
-                    rgba.push(px[0]); // B
-                    // Alpha is undefined in BI_RGB 32bpp; force opaque
-                    // so sources that zero it (most clipboard providers)
-                    // don't silently produce a fully-transparent PNG.
-                    rgba.push(0xFF);
+                for x in 0..w_usize {
+                    let s = &src_row[x * 4..x * 4 + 4];
+                    let d = &mut dst_row[x * 4..x * 4 + 4];
+                    d[0] = s[0];
+                    d[1] = s[1];
+                    d[2] = s[2];
+                    // BI_RGB 32bpp leaves the alpha byte undefined.
+                    d[3] = 0xFF;
                 }
             }
             24 => {
-                for x in 0..w {
-                    let i = x * 3;
-                    rgba.push(row[i + 2]);
-                    rgba.push(row[i + 1]);
-                    rgba.push(row[i]);
-                    rgba.push(0xFF);
+                for x in 0..w_usize {
+                    let s = &src_row[x * 3..x * 3 + 3];
+                    let d = &mut dst_row[x * 4..x * 4 + 4];
+                    d[0] = s[0];
+                    d[1] = s[1];
+                    d[2] = s[2];
+                    d[3] = 0xFF;
                 }
             }
             _ => unreachable!(),
         }
     }
+    Some((out, width, abs_h as i32))
+}
 
-    let mut out: Vec<u8> = Vec::new();
-    {
-        let mut enc = png::Encoder::new(&mut out, w as u32, abs_h as u32);
-        enc.set_color(png::ColorType::Rgba);
-        enc.set_depth(png::BitDepth::Eight);
-        let mut writer = enc.write_header().ok()?;
-        writer.write_image_data(&rgba).ok()?;
+fn normalize_bitfield_component(value: u32, mask: u32) -> Option<u8> {
+    if mask == 0 {
+        return Some(0);
     }
-    Some(out)
+    let shift = mask.trailing_zeros();
+    let bits = mask >> shift;
+    // Reject non-contiguous masks: bits must be of the form 0b0..01..1.
+    if bits == 0 || bits & (bits + 1) != 0 {
+        return None;
+    }
+    let raw = (value & mask) >> shift;
+    let width = bits.count_ones();
+    if width == 8 {
+        return Some(raw as u8);
+    }
+    let max = (1u32 << width) - 1;
+    Some(((raw * 255 + (max / 2)) / max) as u8)
 }
 
 pub(crate) fn png_to_dib(png_bytes: &[u8]) -> Option<Vec<u8>> {
@@ -262,6 +347,91 @@ fn encode_thumbnail_png(full_png: &[u8]) -> Option<Vec<u8>> {
         .write_to(&mut std::io::Cursor::new(&mut out), image::ImageFormat::Png)
         .ok()?;
     Some(out)
+}
+
+/// Repair on-disk storage for one image item that may have been written
+/// by an earlier build that couldn't encode the source DIB (BI_BITFIELDS
+/// was rejected, so the raw DIB ended up on disk with a `.png` extension
+/// and no thumbnail). If the media file is already a real PNG and a
+/// thumbnail exists, this is a no-op. Otherwise, we convert the media
+/// file to PNG and/or generate the missing thumbnail, mutating `item`'s
+/// `thumb_file` to point at the freshly-written file.
+///
+/// Returns `true` when anything on disk or in `item` changed — caller can
+/// use that signal to schedule a `save_history` after the load-time sweep.
+pub(crate) fn repair_image_storage_if_needed(item: &mut ClipItem) -> bool {
+    if item.kind != ItemType::Image {
+        return false;
+    }
+    let Some(media_name) = item.media_file.clone() else {
+        return false;
+    };
+    let Some(media_path) = crate::storage::media_path(&media_name) else {
+        return false;
+    };
+    let bytes = match std::fs::read(&media_path) {
+        Ok(b) => b,
+        Err(_) => return false,
+    };
+
+    let mut changed = false;
+    // Normalize the on-disk media to a real PNG so encode_thumbnail_png
+    // (which goes through the `image` crate) can read it back. Raw-DIB
+    // files written by older builds get rewritten here.
+    let png_bytes = if looks_like_png(&bytes) {
+        bytes
+    } else {
+        let Some(png) = dib_to_png(&bytes) else {
+            debug_log(&format!(
+                "Clippet: repair: id={} media is neither PNG nor decodable DIB",
+                item.id
+            ));
+            return false;
+        };
+        if let Err(e) = crate::storage::write_media_atomic(&media_name, &png) {
+            debug_log(&format!(
+                "Clippet: repair: rewrite media {} failed: {}",
+                media_name, e
+            ));
+            return false;
+        }
+        changed = true;
+        png
+    };
+
+    // Decide whether the thumbnail needs (re)generating: missing field,
+    // or pointed-at file that's gone from disk.
+    let thumb_exists = match &item.thumb_file {
+        Some(name) => crate::storage::media_path(name)
+            .map(|p| p.is_file())
+            .unwrap_or(false),
+        None => false,
+    };
+    if !thumb_exists {
+        let thumb_name = crate::storage::media_filenames(item.id).1;
+        match encode_thumbnail_png(&png_bytes) {
+            Some(thumb_bytes) => match crate::storage::write_media_atomic(&thumb_name, &thumb_bytes) {
+                Ok(()) => {
+                    item.thumb_file = Some(thumb_name);
+                    changed = true;
+                }
+                Err(e) => {
+                    debug_log(&format!(
+                        "Clippet: repair: write thumb {} failed: {}",
+                        thumb_name, e
+                    ));
+                }
+            },
+            None => {
+                debug_log(&format!(
+                    "Clippet: repair: thumbnail encode failed for id={}",
+                    item.id
+                ));
+            }
+        }
+    }
+
+    changed
 }
 
 /// SAFETY: caller must hold the clipboard open. CF_DIB is a global
