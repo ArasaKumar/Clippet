@@ -495,7 +495,14 @@ pub(crate) unsafe fn draw_listbox_item(dis: &DRAWITEMSTRUCT) {
     let item = HISTORY.with(|h| h.borrow().get(row.hist_index).cloned());
     let Some(item) = item else { return };
 
-    let drw = drawable_line(&item);
+    let mut drw = drawable_line(&item);
+    // Image rows already convey the type via the [I] tag and the
+    // thumbnail itself; the "[Image WxH]" caption next to them is just
+    // visual noise, so drop it from owner-draw (the LB_HASSTRINGS shadow
+    // copy used by screen readers / IME still includes it).
+    if item.kind == ItemType::Image {
+        drw.preview.clear();
+    }
     let pad: i32 = 12;
     let col_gap: i32 = 10;
     // Vertically center the text in the row using the selected font's metrics.

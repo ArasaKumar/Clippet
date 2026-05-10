@@ -107,12 +107,18 @@ pub(crate) const CLOSE_BTN_SUBCLASS_ID: usize = 0xC2;
 pub(crate) const RESIZE_MARGIN: i32 = 6;
 
 // ---------------------------------------------------------------------
-// Bottom footer bar — separator + action rows (Level 7+).
+// Bottom footer bar — 1px separator + a compact horizontal row of
+// flat icon buttons (clear, settings, about, quit), right-aligned.
 // ---------------------------------------------------------------------
 
-pub(crate) const FOOTER_HEIGHT: i32 = 121; // 1px separator + 4 × 30px rows
-pub(crate) const FOOTER_ITEM_H: i32 = 30;
-pub(crate) const FOOTER_PAD_X: i32 = 14;
+pub(crate) const FOOTER_HEIGHT: i32 = 44; // 1px separator + 43px button row
+pub(crate) const FOOTER_BTN_W: i32 = 40;
+pub(crate) const FOOTER_BTN_H: i32 = 43;
+pub(crate) const FOOTER_ICON_SIZE: i32 = 20;
+pub(crate) const FOOTER_PAD_X: i32 = 6; // right margin from window edge
+/// Base id for the four rect-based tooltip tools (clear/settings/about/quit).
+/// Each tool is registered with `TOOLTIP_BASE_ID + index`.
+pub(crate) const TOOLTIP_BASE_ID: usize = 1;
 // Win11 close-button hover red ≈ #C42B1C (BGR for COLORREF).
 pub(crate) const CLOSE_HOT_BG: u32 = 0x001C2BC4;
 pub(crate) const CLOSE_HOT_TEXT: u32 = 0x00FFFFFF;
@@ -318,6 +324,10 @@ thread_local! {
     /// True while TrackMouseEvent(TME_LEAVE) is armed for the popup so we
     /// don't re-arm it on every WM_MOUSEMOVE.
     pub(crate) static FOOTER_TRACKING: Cell<bool> = const { Cell::new(false) };
+    /// The standard "tooltips_class32" control. Owns the per-button hover
+    /// tooltips and (via TTF_SUBCLASS) intercepts mouse events on the
+    /// popup itself to show/hide the tip automatically.
+    pub(crate) static TOOLTIP_HWND: Cell<HWND> = const { Cell::new(HWND(std::ptr::null_mut())) };
 }
 
 pub(crate) static NEXT_ID: AtomicU64 = AtomicU64::new(1);

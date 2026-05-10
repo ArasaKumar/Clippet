@@ -35,7 +35,10 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::DataExchange::*;
 use windows::Win32::System::LibraryLoader::*;
-use windows::Win32::UI::Controls::{DRAWITEMSTRUCT, EM_SETCUEBANNER, MEASUREITEMSTRUCT, WM_MOUSELEAVE};
+use windows::Win32::UI::Controls::{
+    DRAWITEMSTRUCT, EM_SETCUEBANNER, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx,
+    MEASUREITEMSTRUCT, WM_MOUSELEAVE,
+};
 use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
@@ -141,6 +144,9 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                 );
             }
             BOLD_FONT.with(|c| c.set(make_bold_font_from(lb)));
+            // Footer button tooltips. Creates the tooltips_class32
+            // control once; per-button rects are pushed in WM_SIZE.
+            let _ = footer::create_tooltip(hwnd);
             register_formats();
             let _ = AddClipboardFormatListener(hwnd);
             // Ctrl+Shift+V global hotkey. If another app already holds
@@ -344,10 +350,11 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_LBUTTONDOWN => {
             // Forward clicks inside the footer area to the appropriate command.
+            let x = (lp.0 as u32 & 0xFFFF) as i16 as i32;
             let y = ((lp.0 as u32 >> 16) & 0xFFFF) as i16 as i32;
             let mut rc = RECT::default();
             if GetClientRect(hwnd, &mut rc).is_ok() {
-                match footer::hit_test(rc.bottom, y) {
+                match footer::hit_test(rc.right, rc.bottom, x, y) {
                     0 => clear_history(hwnd),
                     1 => show_settings_stub(hwnd),
                     2 => show_about(hwnd),
@@ -359,10 +366,11 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_MOUSEMOVE => {
             // Update footer hover state and arm leave-tracking if needed.
+            let x = (lp.0 as u32 & 0xFFFF) as i16 as i32;
             let y = ((lp.0 as u32 >> 16) & 0xFFFF) as i16 as i32;
             let mut rc = RECT::default();
             if GetClientRect(hwnd, &mut rc).is_ok() {
-                let new_hot = footer::hit_test(rc.bottom, y);
+                let new_hot = footer::hit_test(rc.right, rc.bottom, x, y);
                 let old_hot = FOOTER_HOT_ITEM.with(|c| c.get());
                 if new_hot != old_hot {
                     FOOTER_HOT_ITEM.with(|c| c.set(new_hot));
@@ -488,6 +496,9 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
                     let _ = SetWindowPos(lb, None, 0, top, w, lb_h, SWP_NOZORDER);
                 }
             });
+            // Refresh tooltip rectangles so the per-button hover targets
+            // track the new layout after a resize.
+            footer::update_tooltip_rects(hwnd, w, h);
             LRESULT(0)
         }
         WM_DESTROY => {
@@ -552,6 +563,16 @@ fn main() -> Result<()> {
         // Per-monitor DPI v2 keeps cursor coords and window placement
         // in the same coordinate space across mixed-DPI displays.
         let _ = SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+
+        // Load comctl32 and register the tooltip / toolbar / status-bar
+        // window classes. The footer's hover tooltips need this — without
+        // it, the "tooltips_class32" CreateWindowExW would fail. ICC_BAR_CLASSES
+        // is the umbrella flag that covers the tooltip control.
+        let icc = INITCOMMONCONTROLSEX {
+            dwSize: std::mem::size_of::<INITCOMMONCONTROLSEX>() as u32,
+            dwICC: ICC_BAR_CLASSES,
+        };
+        let _ = InitCommonControlsEx(&icc);
 
         // Detect light vs dark from AppsUseLightTheme and cache the
         // palette before we register the window class — the class's
