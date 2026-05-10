@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <title>Clippet</title>
+  <desc>Clipboard glyph used as the application icon. The build script
+  procedurally renders a matching design at ICO resolutions; this SVG is
+  the design source of truth — keep build.rs in sync if you tweak it.</desc>
+
+  <defs>
+    <linearGradient id="board" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3B82F6"/>
+      <stop offset="1" stop-color="#1D4ED8"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Clipboard body -->
+  <rect x="32" y="48" width="192" height="184" rx="20" ry="20" fill="url(#board)"/>
+
+  <!-- Clip mechanism on top of the board -->
+  <rect x="80" y="24" width="96" height="44" rx="10" ry="10" fill="#1E3A8A"/>
+
+  <!-- Paper -->
+  <rect x="56" y="80" width="144" height="136" rx="6" ry="6" fill="#F8FAFC"/>
+
+  <!-- Text lines -->
+  <rect x="76" y="108" width="104" height="10" rx="3" ry="3" fill="#94A3B8"/>
+  <rect x="76" y="138" width="80"  height="10" rx="3" ry="3" fill="#94A3B8"/>
+  <rect x="76" y="168" width="92"  height="10" rx="3" ry="3" fill="#94A3B8"/>
+</svg>

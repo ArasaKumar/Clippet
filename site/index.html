@@ -1,0 +1,442 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clippet — The Windows 11 clipboard manager that respects your machine</title>
+  <meta name="description" content="A native, single-binary clipboard history manager for Windows 11. Built in Rust on raw Win32. No Electron, no telemetry, under 8 MB of RAM at idle." />
+  <meta name="theme-color" content="#0b1020" media="(prefers-color-scheme: dark)" />
+  <meta name="theme-color" content="#f7f8fc" media="(prefers-color-scheme: light)" />
+
+  <link rel="icon" type="image/svg+xml" href="clippet.svg" />
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Apply saved theme override before paint to avoid a flash of the wrong palette.
+       No saved value = follow system preference via the CSS @media block. -->
+  <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem('clippet-theme');
+        if (saved === 'light' || saved === 'dark') {
+          document.documentElement.setAttribute('data-theme', saved);
+        }
+      } catch (e) { /* private mode / disabled storage */ }
+    })();
+  </script>
+
+  <meta property="og:title" content="Clippet — Windows 11 clipboard manager" />
+  <meta property="og:description" content="Native, single-binary, < 8 MB RAM, no telemetry. Ctrl+Shift+V brings up your clipboard history." />
+  <meta property="og:type" content="website" />
+  <meta property="og:image" content="clippet.svg" />
+  <meta name="twitter:card" content="summary_large_image" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="container nav">
+    <a class="brand" href="#top" aria-label="Clippet home">
+      <img src="clippet.svg" alt="" width="28" height="28" />
+      <span>Clippet</span>
+    </a>
+    <nav class="nav-links" aria-label="Primary">
+      <a href="#features">Features</a>
+      <a href="#how">How it works</a>
+      <a href="#install">Install</a>
+      <a href="#faq">FAQ</a>
+      <button type="button" class="theme-toggle" aria-label="Toggle theme" aria-pressed="false" title="Toggle theme">
+        <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+        <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <a class="btn btn-ghost" href="https://github.com/ArasaKumar/Clippet" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- =========================== HERO =========================== -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-copy">
+        <div class="eyebrow">
+          <span class="dot"></span> Native Win32 · Single .exe · No telemetry
+        </div>
+        <h1>The Windows 11 clipboard manager that <span class="grad">respects your machine</span>.</h1>
+        <p class="lede">
+          A native, single-binary clipboard history utility for Windows 11. Built in Rust on raw Win32 — no Electron,
+          no web view, no background services, no cloud sync. Under 8&nbsp;MB of RAM at idle. Your clipboard never
+          leaves your computer.
+        </p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/ArasaKumar/Clippet" target="_blank" rel="noopener">
+            View on GitHub
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 17L17 7M17 7H8M17 7v9"/></svg>
+          </a>
+          <a class="btn btn-ghost" href="#install">Build from source</a>
+        </div>
+        <ul class="hero-stats">
+          <li><strong>&lt; 8 MB</strong><span>RAM at idle</span></li>
+          <li><strong>1 file</strong><span>Single .exe</span></li>
+          <li><strong>0</strong><span>Network calls</span></li>
+        </ul>
+      </div>
+
+      <!-- Stylized popup mockup -->
+      <div class="hero-mock" aria-hidden="true">
+        <div class="mock-window">
+          <div class="mock-titlebar">
+            <span class="mock-title">Clippet</span>
+            <button class="mock-close" tabindex="-1" aria-label="Close">×</button>
+          </div>
+          <div class="mock-search">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+            <span class="mock-cue">Search clipboard...</span>
+          </div>
+          <ul class="mock-list">
+            <li class="mock-row mock-row-selected">
+              <span class="mock-tag tag-text">[T]</span>
+              <span class="mock-preview">Ship Clippet 1.0 — single binary, no installer</span>
+              <span class="mock-time">just now</span>
+              <span class="mock-pin pinned">★</span>
+            </li>
+            <li class="mock-row">
+              <span class="mock-tag tag-code">[C:rs]</span>
+              <span class="mock-preview"><code>fn main() -&gt; Result&lt;()&gt; { ... }</code></span>
+              <span class="mock-time">2m</span>
+              <span class="mock-pin">☆</span>
+            </li>
+            <li class="mock-row mock-row-image">
+              <span class="mock-tag tag-image">[I]</span>
+              <span class="mock-preview mock-preview-image">
+                <span class="mock-thumb" aria-hidden="true"></span>
+                <span>screenshot-2026-05-09.png</span>
+              </span>
+              <span class="mock-time">14m</span>
+              <span class="mock-pin">☆</span>
+            </li>
+            <li class="mock-row">
+              <span class="mock-tag tag-html">[H]</span>
+              <span class="mock-preview">&lt;article&gt; Reverse-engineering Win11's clipboard...</span>
+              <span class="mock-time">1h</span>
+              <span class="mock-pin">☆</span>
+            </li>
+            <li class="mock-row">
+              <span class="mock-tag tag-file">[F]</span>
+              <span class="mock-preview">C:\Users\...\Clippet\target\release\clippet.exe</span>
+              <span class="mock-time">3h</span>
+              <span class="mock-pin pinned">★</span>
+            </li>
+            <li class="mock-row">
+              <span class="mock-tag tag-sheet">[X]</span>
+              <span class="mock-preview">Q4 forecast — 12 rows × 6 columns</span>
+              <span class="mock-time">yesterday</span>
+              <span class="mock-pin">☆</span>
+            </li>
+          </ul>
+        </div>
+        <div class="mock-keys">
+          <kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>V</kbd>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== COMPARE ============================ -->
+  <section class="compare">
+    <div class="container">
+      <h2 class="section-title">Why Clippet</h2>
+      <p class="section-lede">
+        Windows 11's built-in clipboard history is fine until you need it to remember more than a few items, paste
+        rich content with full fidelity, or stay out of the cloud. Clippet does all of that in a binary you can
+        drop anywhere.
+      </p>
+      <div class="table-wrap">
+        <table class="compare-table">
+          <thead>
+            <tr>
+              <th></th>
+              <th class="th-clippet">Clippet</th>
+              <th>Win+V (built-in)</th>
+              <th>Electron-based managers</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Native Win32 — no Chromium runtime</td><td class="yes">Yes</td><td class="yes">Yes</td><td class="no">No</td></tr>
+            <tr><td>Persistent history across reboots</td><td class="yes">Yes</td><td class="partial">Partial</td><td class="yes">Yes</td></tr>
+            <tr><td>Rich content (RTF, HTML, images, files)</td><td class="yes">Yes</td><td class="partial">Partial</td><td class="partial">Varies</td></tr>
+            <tr><td>Pin items past the history cap</td><td class="yes">Yes</td><td class="no">No</td><td class="partial">Varies</td></tr>
+            <tr><td>Fuzzy search across history</td><td class="yes">Yes</td><td class="no">No</td><td class="partial">Varies</td></tr>
+            <tr><td>Idle memory footprint</td><td class="yes">&lt; 8 MB</td><td>n/a</td><td class="no">100 – 400 MB</td></tr>
+            <tr><td>Distribution</td><td class="yes">One .exe</td><td>OS-bundled</td><td class="no">Installer + updater</td></tr>
+            <tr><td>Network access</td><td class="yes">None</td><td class="partial">Cloud sync optional</td><td class="no">Often required</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== FEATURES ============================ -->
+  <section id="features" class="features">
+    <div class="container">
+      <h2 class="section-title">Built for the way you actually work</h2>
+      <div class="feature-grid">
+
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M9 3h6v3H9z"/><path d="M8 11h8M8 15h6"/></svg>
+          </div>
+          <h3>Captures the format that matters</h3>
+          <p>Clippet inspects every clipboard write and stores the most informative format available — not a flattened text version of it. Files paste back as files, RTF keeps its styling, and images show a thumbnail inline and round-trip through PNG.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg>
+          </div>
+          <h3>Lives where you do</h3>
+          <p>A global <kbd>Ctrl + Shift + V</kbd> hotkey summons the popup at your cursor. Pick an item with arrow keys + Enter. Clippet restores focus to the previous window and synthesizes a real Ctrl+V — the paste lands exactly where it would have.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+          </div>
+          <h3>Fuzzy search built in</h3>
+          <p>Just start typing. Skim-style fuzzy matching across every item's preview, with matched characters highlighted in bold and rows reordered by score. Pinned items still float to the top.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2l3 6 6 .9-4.5 4.4 1 6.7L12 17l-5.5 3 1-6.7L3 8.9 9 8z"/></svg>
+          </div>
+          <h3>Pin anything important</h3>
+          <p>Star an item to pin it. Pinned entries sort above the rest, survive the 200-item history cap forever, and stay across restarts. Right-click any row for Paste / Pin / Copy / Delete.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" fill-opacity=".12"/></svg>
+          </div>
+          <h3>Looks like Windows 11</h3>
+          <p>Acrylic backdrop, rounded corners via DWM, custom flat title bar, per-monitor DPI v2, light/dark palette tracked from the system theme. Segoe UI Variable for body, semibold heading on the title bar.</p>
+        </article>
+
+        <article class="feature-card">
+          <div class="feature-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2v8m0 0 3-3m-3 3-3-3"/><path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/></svg>
+          </div>
+          <h3>Resilient by design</h3>
+          <p>Atomic disk writes (write to .tmp then rename) — no half-written files if power dies mid-save. Every Win32 call has paired cleanup. Pinned items are exempt from history overflow eviction.</p>
+        </article>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== FORMATS ============================ -->
+  <section class="formats">
+    <div class="container">
+      <h2 class="section-title">Every clipboard format Windows publishes</h2>
+      <p class="section-lede">Each row in the popup is tagged with its source format so you know what you're pasting before you paste it.</p>
+      <div class="format-grid">
+        <div class="format"><span class="format-tag tag-text">[T]</span><div><strong>Plain text</strong><span>UTF-8 / UTF-16</span></div></div>
+        <div class="format"><span class="format-tag tag-rich">[R]</span><div><strong>Rich text</strong><span>Original RTF — fonts and styling preserved</span></div></div>
+        <div class="format"><span class="format-tag tag-image">[I]</span><div><strong>Image</strong><span>Thumbnail preview in popup; round-trips back to DIB on paste</span></div></div>
+        <div class="format"><span class="format-tag tag-file">[F]</span><div><strong>Files / folders</strong><span>Real CF_HDROP — pastes into Explorer</span></div></div>
+        <div class="format"><span class="format-tag tag-html">[H]</span><div><strong>HTML</strong><span>Full CF_HTML fragment with source URL</span></div></div>
+        <div class="format"><span class="format-tag tag-sheet">[X]</span><div><strong>Spreadsheet</strong><span>Excel / Sheets cells with structure intact</span></div></div>
+        <div class="format"><span class="format-tag tag-code">[C]</span><div><strong>Code</strong><span>Auto-tagged with a language hint from the foreground IDE</span></div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== HOW =========================== -->
+  <section id="how" class="how">
+    <div class="container">
+      <h2 class="section-title">How it works</h2>
+      <div class="how-grid">
+        <div>
+          <h3>Single-threaded by design</h3>
+          <p>The Win32 message loop owns everything. There is no async runtime, no worker pool, no <code>Mutex</code> — just thread-local state read and written from the main thread. Less code, fewer bugs, lower memory.</p>
+          <h3>Capture priority</h3>
+          <p>On every <code>WM_CLIPBOARDUPDATE</code>, Clippet picks the richest available format:</p>
+          <p class="pipeline">Files → Spreadsheet → RTF → HTML → Image → Unicode text → ANSI text</p>
+          <h3>Custom Win11 chrome</h3>
+          <p>The popup is a <code>WS_POPUP | WS_THICKFRAME</code> window with the native caption suppressed. <code>WM_NCHITTEST</code> maps the outer 6 px to resize cursors and the top strip to a draggable region. DWM paints the rounded corners and acrylic backdrop.</p>
+        </div>
+        <div class="diagram">
+          <pre>
+                ┌─────────────────────────────┐
+                │       clippet.exe           │
+                ├─────────────────────────────┤
+   WM_HOTKEY ──▶│  Win32 message loop         │
+   WM_CLIP-  ──▶│   (single thread)           │
+   BOARD-       │                             │
+   UPDATE       │  ┌──────────┐  ┌──────────┐ │
+                │  │ capture  │  │ paste    │ │
+                │  │ pipeline │─▶│ Ctrl+V   │ │
+                │  └──────────┘  └──────────┘ │
+                │       │                     │
+                │       ▼                     │
+                │  ┌──────────┐  ┌──────────┐ │
+                │  │ fuzzy    │─▶│ owner-   │ │
+                │  │ search   │  │ draw UI  │ │
+                │  └──────────┘  └──────────┘ │
+                │       │                     │
+                │       ▼                     │
+                │  atomic JSON                │
+                │  %APPDATA%\Clippet\         │
+                └─────────────────────────────┘</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== PRIVACY ============================ -->
+  <section class="privacy">
+    <div class="container privacy-card">
+      <div class="privacy-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.5 9.4 8 11 4.5-1.6 8-6 8-11V5l-8-3z"/><path d="m9 12 2 2 4-4"/></svg>
+      </div>
+      <div>
+        <h2>No network code. Anywhere.</h2>
+        <p>
+          Clippet has zero network calls. No analytics SDK, no auto-update check, no remote logging, no cloud sync.
+          Every byte of your clipboard data lives on your disk and nowhere else. The full source — about a thousand
+          lines of Rust — is public domain. Audit it.
+        </p>
+        <a class="btn btn-ghost" href="https://github.com/ArasaKumar/Clippet/blob/main/src/storage.rs" target="_blank" rel="noopener">Read storage.rs →</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== INSTALL ============================ -->
+  <section id="install" class="install">
+    <div class="container">
+      <h2 class="section-title">Build it yourself in two commands</h2>
+      <p class="section-lede">No installer, no admin elevation, no Visual Studio project. Just <code>cargo build</code>.</p>
+
+      <div class="install-grid">
+        <div>
+          <h3>Requirements</h3>
+          <ul class="checks">
+            <li>Windows 10 (build 1903+) or Windows 11</li>
+            <li>Rust toolchain via <a href="https://rustup.rs" target="_blank" rel="noopener">rustup</a></li>
+            <li>MSVC target <code>x86_64-pc-windows-msvc</code> (rustup default)</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Build</h3>
+          <pre class="code"><code><span class="tok-prompt">PS&gt;</span> git clone https://github.com/ArasaKumar/Clippet.git
+<span class="tok-prompt">PS&gt;</span> cd Clippet
+<span class="tok-prompt">PS&gt;</span> cargo build --release
+<span class="tok-comment"># target\release\clippet.exe is self-contained</span>
+<span class="tok-prompt">PS&gt;</span> .\target\release\clippet.exe</code></pre>
+        </div>
+      </div>
+
+      <h3 class="shortcuts-title">Shortcuts</h3>
+      <div class="shortcuts">
+        <div><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>V</kbd><span>Show / hide the popup</span></div>
+        <div><kbd>↑</kbd> <kbd>↓</kbd><span>Navigate items</span></div>
+        <div><kbd>Tab</kbd><span>Toggle focus: search / list</span></div>
+        <div><kbd>Enter</kbd><span>Paste into the previous window</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>P</kbd><span>Pin / unpin selected row</span></div>
+        <div><kbd>Esc</kbd><span>Hide the popup</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================== FAQ =========================== -->
+  <section id="faq" class="faq">
+    <div class="container">
+      <h2 class="section-title">FAQ</h2>
+      <div class="faq-grid">
+        <details>
+          <summary>Why <kbd>Ctrl+Shift+V</kbd> instead of <kbd>Win+V</kbd>?</summary>
+          <p>The Windows 11 shell holds <code>Win+V</code> even when clipboard history is disabled in Settings, so it can't be reliably registered by another app. <code>Ctrl+Shift+V</code> is unclaimed in stock Windows and free across most apps.</p>
+        </details>
+        <details>
+          <summary>Does Clippet conflict with Windows' own clipboard history?</summary>
+          <p>No. They run independently. If you don't want both, disable the built-in one under Settings → System → Clipboard.</p>
+        </details>
+        <details>
+          <summary>Where are images stored?</summary>
+          <p>Re-encoded to PNG and base64-embedded inside <code>history.json</code>. A thumbnail is rendered inline in the popup so you can see what you're pasting before you paste it. The 200-item cap keeps the file from growing unbounded. Pinned images are exempt — be mindful when pinning very large screenshots.</p>
+        </details>
+        <details>
+          <summary>Why Rust + raw Win32 instead of a framework?</summary>
+          <p>The whole point is the sub-MB binary and the &lt; 8 MB idle footprint. A framework would add tens of MB of runtime for features Clippet doesn't need.</p>
+        </details>
+        <details>
+          <summary>Can I trust this with sensitive data?</summary>
+          <p>The same trust you give any local app that reads your clipboard. Clippet writes to a per-user AppData file that other users on the machine can't read. Source is public domain — audit it.</p>
+        </details>
+        <details>
+          <summary>How do I clear history?</summary>
+          <p>Right-click the tray icon → Clear history. Or delete <code>%APPDATA%\Clippet\history.json</code> while Clippet isn't running.</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="container footer-grid">
+    <div>
+      <a class="brand" href="#top">
+        <img src="clippet.svg" alt="" width="22" height="22" />
+        <span>Clippet</span>
+      </a>
+      <p class="muted">Released into the public domain under the Unlicense.</p>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/ArasaKumar/Clippet" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://github.com/ArasaKumar/Clippet/blob/main/PLAN.md" target="_blank" rel="noopener">Roadmap</a>
+      <a href="https://github.com/ArasaKumar/Clippet/issues" target="_blank" rel="noopener">Issues</a>
+      <a href="https://github.com/ArasaKumar/Clippet/blob/main/LICENSE" target="_blank" rel="noopener">License</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    var btn = document.querySelector('.theme-toggle');
+    if (!btn) return;
+    var mql = window.matchMedia('(prefers-color-scheme: dark)');
+
+    function effectiveTheme() {
+      var pinned = root.getAttribute('data-theme');
+      if (pinned === 'light' || pinned === 'dark') return pinned;
+      return mql.matches ? 'dark' : 'light';
+    }
+
+    function syncLabel() {
+      var t = effectiveTheme();
+      btn.setAttribute('aria-pressed', t === 'dark' ? 'true' : 'false');
+      btn.setAttribute('aria-label',
+        t === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+    }
+
+    btn.addEventListener('click', function () {
+      var next = effectiveTheme() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      try { localStorage.setItem('clippet-theme', next); } catch (e) {}
+      syncLabel();
+    });
+
+    // Follow system changes if the user hasn't pinned a choice.
+    var onSystemChange = function () {
+      if (!root.getAttribute('data-theme')) syncLabel();
+    };
+    if (mql.addEventListener) mql.addEventListener('change', onSystemChange);
+    else if (mql.addListener) mql.addListener(onSystemChange);
+
+    syncLabel();
+  })();
+</script>
+
+</body>
+</html>

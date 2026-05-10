@@ -1,0 +1,52 @@
+[package]
+name = "clippet"
+version = "0.1.0"
+edition = "2021"
+# MSRV: thread_local! const blocks (1.59), let-else (1.65), div_ceil (1.73).
+rust-version = "1.73"
+description = "Native Windows 11 clipboard manager"
+publish = false
+build = "build.rs"
+
+[lints.rust]
+# All unsafe blocks must justify themselves with a SAFETY comment.
+# Keep the default deny on missing-docs off — this is an app, not a lib.
+unsafe_op_in_unsafe_fn = "allow"
+
+[[bin]]
+name = "clippet"
+path = "src/main.rs"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
+
+[dependencies]
+windows = { version = "0.58", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Dwm",
+    "Win32_Graphics_Gdi",
+    "Win32_System_DataExchange",
+    "Win32_System_Diagnostics_Debug",
+    "Win32_System_LibraryLoader",
+    "Win32_System_Memory",
+    "Win32_System_Registry",
+    "Win32_UI_Controls",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"
+base64 = "0.22"
+png = "0.17"
+fuzzy-matcher = "0.3"
+
+[build-dependencies]
+embed-resource = "2"
+png = "0.17"
