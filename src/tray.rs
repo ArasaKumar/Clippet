@@ -248,13 +248,14 @@ pub(crate) unsafe fn clear_history(hwnd: HWND) {
     let r = show_msgbox(
         hwnd,
         "Clippet",
-        "Clear all clipboard history?\n\nThis cannot be undone.",
+        "Clear unpinned clipboard history?\n\nPinned items will be kept. This cannot be undone.",
         MB_YESNO | MB_ICONQUESTION,
     );
     if r == IDYES {
-        HISTORY.with(|h| h.borrow_mut().clear());
+        HISTORY.with(|h| h.borrow_mut().retain(|it| it.pinned));
         clear_thumb_cache();
-        save_history(&[]);
+        let snapshot: Vec<_> = HISTORY.with(|h| h.borrow().clone());
+        save_history(&snapshot);
         refresh_listbox();
         update_tray_tooltip(hwnd);
     }
