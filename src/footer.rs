@@ -15,19 +15,19 @@ use windows::Win32::Foundation::*;
 use windows::Win32::Graphics::Gdi::*;
 use windows::Win32::System::LibraryLoader::*;
 use windows::Win32::UI::Controls::{
-    TOOLTIPS_CLASSW, TOOLTIP_FLAGS, TTF_SUBCLASS, TTM_ADDTOOLW, TTM_NEWTOOLRECTW, TTS_ALWAYSTIP,
-    TTS_NOPREFIX, TTTOOLINFOW,
+    TOOLTIPS_CLASSW, TOOLTIP_FLAGS, TTF_SUBCLASS, TTM_ADDTOOLW, TTM_NEWTOOLRECTW,
+    TTM_UPDATETIPTEXTW, TTS_ALWAYSTIP, TTS_NOPREFIX, TTTOOLINFOW,
 };
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::state::{
     BG_BRUSH, FOOTER_BTN_H, FOOTER_BTN_W, FOOTER_HEIGHT, FOOTER_HOT_ITEM, FOOTER_ICON_SIZE,
-    FOOTER_PAD_X, PALETTE, Palette, SEL_BRUSH, TOOLTIP_BASE_ID, TOOLTIP_HWND,
+    FOOTER_PAD_X, IS_DARK, PALETTE, Palette, SEL_BRUSH, TOOLTIP_BASE_ID, TOOLTIP_HWND,
 };
 
 // Indices match the WM_LBUTTONDOWN dispatch arms in main.rs:
-// 0 = Clear History, 1 = Settings, 2 = About, 3 = Quit.
-pub(crate) const ITEM_COUNT: i32 = 4;
+// 0 = Theme Toggle, 1 = Clear History, 2 = Settings, 3 = About, 4 = Quit.
+pub(crate) const ITEM_COUNT: i32 = 5;
 
 /// X coordinate of the leftmost button (button index 0 = Clear History).
 fn buttons_left(client_w: i32) -> i32 {
@@ -51,13 +51,16 @@ pub(crate) fn hit_test(client_w: i32, client_h: i32, x: i32, y: i32) -> i32 {
 
 /// Per-action accent color. Trash is red so destructive actions read
 /// at a glance; quit is amber as a softer "caution"; info is blue;
-/// settings stays neutral in the secondary text color.
+/// settings stays neutral in the secondary text color. The theme
+/// toggle borrows the pinned-star accent so it reads as a primary,
+/// non-destructive action.
 fn icon_color(idx: i32, pal: &Palette) -> u32 {
     match idx {
-        0 => pal.tag_rich,  // Clear History — red
-        1 => pal.subtext,   // Settings — neutral
-        2 => pal.tag_code,  // About — blue
-        3 => pal.tag_file,  // Quit — amber
+        0 => pal.accent,    // Theme toggle — gold accent
+        1 => pal.tag_rich,  // Clear History — red
+        2 => pal.subtext,   // Settings — neutral
+        3 => pal.tag_code,  // About — blue
+        4 => pal.tag_file,  // Quit — amber
         _ => pal.text,
     }
 }
@@ -119,10 +122,20 @@ pub(crate) unsafe fn paint(hwnd: HWND, hdc: HDC) {
         let cy = btn_top + (usable_h - FOOTER_ICON_SIZE) / 2 + FOOTER_ICON_SIZE / 2;
         let color = icon_color(i, &pal);
         match i {
-            0 => draw_trash_icon(hdc, cx, cy, color),
-            1 => draw_cog_icon(hdc, cx, cy, color),
-            2 => draw_info_icon(hdc, cx, cy, color),
-            3 => draw_power_icon(hdc, cx, cy, color),
+            0 => {
+                // Show the *target* state: sun when currently dark (so a
+                // click switches to light), moon when currently light.
+                let dark = IS_DARK.with(|c| c.get());
+                if dark {
+                    draw_sun_icon(hdc, cx, cy, color);
+                } else {
+                    draw_moon_icon(hdc, cx, cy, color);
+                }
+            }
+            1 => draw_trash_icon(hdc, cx, cy, color),
+            2 => draw_cog_icon(hdc, cx, cy, color),
+            3 => draw_info_icon(hdc, cx, cy, color),
+            4 => draw_power_icon(hdc, cx, cy, color),
             _ => {}
         }
     }
@@ -214,6 +227,71 @@ unsafe fn draw_info_icon(hdc: HDC, cx: i32, cy: i32, color: u32) {
     });
 }
 
+/// Sun: a small hollow circle with eight short rays radiating outward.
+/// Drawn for the theme-toggle button when the popup is currently in
+/// dark mode (clicking the button switches to light, so the icon shows
+/// the destination state).
+unsafe fn draw_sun_icon(hdc: HDC, cx: i32, cy: i32, color: u32) {
+    let null_brush = GetStockObject(NULL_BRUSH);
+    with_pen(hdc, color, |hdc| {
+        let old_brush = SelectObject(hdc, null_brush);
+        // Sun body.
+        let _ = Ellipse(hdc, cx - 4, cy - 4, cx + 4, cy + 4);
+        SelectObject(hdc, old_brush);
+        // Eight rays at 45° intervals — inner endpoint just outside the
+        // body, outer endpoint near the icon's nominal 9-px radius.
+        for &(dx, dy, ex, ey) in &[
+            (0i32, -6i32, 0i32, -9i32),
+            (0, 6, 0, 9),
+            (-6, 0, -9, 0),
+            (6, 0, 9, 0),
+            (-4, -4, -6, -6),
+            (4, -4, 6, -6),
+            (-4, 4, -6, 6),
+            (4, 4, 6, 6),
+        ] {
+            let _ = MoveToEx(hdc, cx + dx, cy + dy, None);
+            let _ = LineTo(hdc, cx + ex, cy + ey);
+        }
+    });
+}
+
+/// Moon: filled crescent built as the region difference between an
+/// outer disc and a smaller disc offset to the right. `RGN_DIFF` is
+/// resolution-independent (no polyline ambiguity), and a single
+/// `FillRgn` keeps the silhouette crisp regardless of the underlying
+/// background — hover state vs. rest doesn't need a separate code path.
+unsafe fn draw_moon_icon(hdc: HDC, cx: i32, cy: i32, color: u32) {
+    let outer = CreateEllipticRgn(cx - 8, cy - 8, cx + 8, cy + 8);
+    if outer.0.is_null() {
+        return;
+    }
+    // Bite circle: same vertical bounds but shifted right by ~5px so
+    // the carved edge sits inside the moon body, leaving a left-facing
+    // crescent with a comfortable bulge.
+    let bite = CreateEllipticRgn(cx - 3, cy - 8, cx + 13, cy + 8);
+    if bite.0.is_null() {
+        let _ = DeleteObject(outer);
+        return;
+    }
+    let crescent = CreateRectRgn(0, 0, 0, 0);
+    if crescent.0.is_null() {
+        let _ = DeleteObject(outer);
+        let _ = DeleteObject(bite);
+        return;
+    }
+    let _ = CombineRgn(crescent, outer, bite, RGN_DIFF);
+
+    let brush = CreateSolidBrush(COLORREF(color));
+    if !brush.0.is_null() {
+        let _ = FillRgn(hdc, crescent, brush);
+        let _ = DeleteObject(brush);
+    }
+    let _ = DeleteObject(outer);
+    let _ = DeleteObject(bite);
+    let _ = DeleteObject(crescent);
+}
+
 /// Power: a near-full arc with a gap at the top and a vertical stem
 /// passing through the gap. We trace the curve as a 36-segment polyline
 /// instead of using GDI `Arc` because Arc with two endpoints near each
@@ -253,14 +331,28 @@ unsafe fn draw_power_icon(hdc: HDC, cx: i32, cy: i32, color: u32) {
 
 /// Per-tool labels. `w!()` wraps each as a static UTF-16 PCWSTR, so we
 /// can hand the pointers to TOOLINFOW.lpszText without managing
-/// lifetimes ourselves.
+/// lifetimes ourselves. The theme-toggle tooltip is set per-state in
+/// `refresh_theme_tooltip` after the toggle flips IS_DARK.
 fn tip_for(idx: i32) -> PCWSTR {
     match idx {
-        0 => w!("Clear History"),
-        1 => w!("Settings"),
-        2 => w!("About"),
-        3 => w!("Quit"),
+        0 => theme_toggle_tip(),
+        1 => w!("Clear History"),
+        2 => w!("Settings"),
+        3 => w!("About"),
+        4 => w!("Quit"),
         _ => w!(""),
+    }
+}
+
+/// Tooltip text for the theme toggle. Mirrors `draw_sun_icon` /
+/// `draw_moon_icon`: shows the *target* state so the user knows what
+/// will happen when they click.
+fn theme_toggle_tip() -> PCWSTR {
+    let dark = IS_DARK.with(|c| c.get());
+    if dark {
+        w!("Switch to Light Mode")
+    } else {
+        w!("Switch to Dark Mode")
     }
 }
 
@@ -323,6 +415,36 @@ pub(crate) unsafe fn create_tooltip(parent: HWND) -> Result<()> {
         );
     }
     Ok(())
+}
+
+/// Refresh the theme-toggle tooltip text after the popup flips between
+/// light and dark. Re-reads `IS_DARK` via `theme_toggle_tip` and sends
+/// TTM_UPDATETIPTEXTW so a hover after the toggle reads the new label.
+///
+/// SAFETY: TOOLTIP_HWND is populated by `create_tooltip`; SendMessageW
+/// on a null handle is a no-op (we early-exit).
+pub(crate) unsafe fn refresh_theme_tooltip(parent: HWND) {
+    let tt = TOOLTIP_HWND.with(|c| c.get());
+    if tt.0.is_null() {
+        return;
+    }
+    let hmod = match GetModuleHandleW(None) {
+        Ok(m) => HINSTANCE(m.0),
+        Err(_) => HINSTANCE(std::ptr::null_mut()),
+    };
+    let tip = theme_toggle_tip();
+    let mut ti: TTTOOLINFOW = std::mem::zeroed();
+    ti.cbSize = std::mem::size_of::<TTTOOLINFOW>() as u32;
+    ti.hwnd = parent;
+    ti.uId = TOOLTIP_BASE_ID; // theme toggle is button index 0
+    ti.lpszText = PWSTR(tip.0 as *mut u16);
+    ti.hinst = hmod;
+    SendMessageW(
+        tt,
+        TTM_UPDATETIPTEXTW,
+        WPARAM(0),
+        LPARAM(&ti as *const _ as isize),
+    );
 }
 
 /// Push the current button rects into the tooltip control so it knows

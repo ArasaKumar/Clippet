@@ -351,6 +351,11 @@ pub(crate) struct Settings {
     pub popup_w: Option<i32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub popup_h: Option<i32>,
+    /// User-applied theme override. `None` (absent) follows the system
+    /// `AppsUseLightTheme`; `Some(true)` forces light; `Some(false)`
+    /// forces dark. Written by the footer theme-toggle button.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub theme_override: Option<bool>,
 }
 
 fn settings_path() -> Option<PathBuf> {

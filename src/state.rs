@@ -320,6 +320,11 @@ thread_local! {
     /// Theme + cached GDI objects derived from it.
     pub(crate) static PALETTE: Cell<Palette> = const { Cell::new(DARK_PALETTE) };
     pub(crate) static IS_DARK: Cell<bool> = const { Cell::new(true) };
+    /// User-applied theme override: `None` follows the system
+    /// `AppsUseLightTheme` value, `Some(true)` forces light, `Some(false)`
+    /// forces dark. Hydrated from settings.json at startup; mutated by
+    /// the footer theme-toggle button.
+    pub(crate) static THEME_OVERRIDE: Cell<Option<bool>> = const { Cell::new(None) };
     pub(crate) static BG_BRUSH: Cell<HBRUSH> = const { Cell::new(HBRUSH(std::ptr::null_mut())) };
     pub(crate) static SEL_BRUSH: Cell<HBRUSH> = const { Cell::new(HBRUSH(std::ptr::null_mut())) };
     /// Brush used for the search-box background — slightly tinted off the
