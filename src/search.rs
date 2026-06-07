@@ -6,30 +6,12 @@
 //! `push_item`, `refresh_listbox`, and `row_to_hist` are the small
 //! helpers other modules use to interact with the filtered view.
 
-use windows::Win32::Foundation::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::listbox::sweep_thumb_cache;
-use crate::state::{ClipItem, FilterRow, ItemType, FILTERED, HISTORY, LISTBOX, SEARCH};
+use crate::state::{ClipItem, FilterRow, FILTERED, HISTORY, LISTBOX, SEARCH};
 use crate::storage::save_history;
 use crate::storage::prune_history;
-use crate::util::{relative_time, to_wide};
-
-/// Tag + preview + relative time, used for the LB_HASSTRINGS shadow copy
-/// (screen readers / IME). The owner-draw renderer lays the same fields
-/// out as colored columns and ignores this string.
-pub(crate) fn format_item_line(item: &ClipItem) -> String {
-    let kind_label: String = match (&item.kind, item.lang.as_deref()) {
-        (ItemType::Code, Some(lang)) if !lang.is_empty() => format!("[C:{}]", lang),
-        _ => item.kind.tag().to_string(),
-    };
-    format!(
-        "{}  {}  {}",
-        kind_label,
-        item.preview,
-        relative_time(item.timestamp)
-    )
-}
 
 /// Append a freshly captured item, dedupe against the previous entry,
 /// prune to MAX_ITEMS (preserving pins), and persist. Returns true if
@@ -153,29 +135,11 @@ pub(crate) unsafe fn update_filter() {
 
     FILTERED.with(|f| *f.borrow_mut() = rows);
 
-    SendMessageW(lb, LB_RESETCONTENT, WPARAM(0), LPARAM(0));
+    // Rebuild the custom list's row geometry from the new FILTERED view and
+    // reset the selection to the top row (or clear it when empty).
+    crate::listbox::list_rebuild();
     let n_rows = FILTERED.with(|f| f.borrow().len());
-    HISTORY.with(|h| {
-        let hist = h.borrow();
-        FILTERED.with(|f| {
-            let rows = f.borrow();
-            for row in rows.iter() {
-                if let Some(item) = hist.get(row.hist_index) {
-                    let line = format_item_line(item);
-                    let wide = to_wide(&line);
-                    SendMessageW(
-                        lb,
-                        LB_ADDSTRING,
-                        WPARAM(0),
-                        LPARAM(wide.as_ptr() as isize),
-                    );
-                }
-            }
-        });
-    });
-    if n_rows > 0 {
-        SendMessageW(lb, LB_SETCURSEL, WPARAM(0), LPARAM(0));
-    }
+    crate::listbox::list_set_sel(if n_rows > 0 { 0 } else { -1 });
 }
 
 /// Map a visible-row index (FILTERED order) to its history index.

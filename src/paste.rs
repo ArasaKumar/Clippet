@@ -206,7 +206,7 @@ pub(crate) unsafe fn activate_selected(hwnd: HWND) -> bool {
     if lb.0.is_null() {
         return false;
     }
-    let sel = SendMessageW(lb, LB_GETCURSEL, WPARAM(0), LPARAM(0)).0 as i32;
+    let sel = crate::listbox::list_get_sel();
     if sel < 0 {
         return false;
     }

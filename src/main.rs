@@ -37,7 +37,7 @@ use windows::Win32::System::DataExchange::*;
 use windows::Win32::System::LibraryLoader::*;
 use windows::Win32::UI::Controls::{
     DRAWITEMSTRUCT, EM_SETCUEBANNER, ICC_BAR_CLASSES, INITCOMMONCONTROLSEX, InitCommonControlsEx,
-    MEASUREITEMSTRUCT, WM_MOUSELEAVE,
+    WM_MOUSELEAVE,
 };
 use windows::Win32::UI::HiDpi::*;
 use windows::Win32::UI::Input::KeyboardAndMouse::*;
@@ -45,8 +45,8 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::clipboard::{capture_clipboard, register_formats};
 use crate::listbox::{
-    create_listbox, create_search_box, draw_listbox_item, make_bold_font_from,
-    measure_listbox_item, toggle_pin_at_row,
+    create_listbox, create_search_box, list_count, list_get_sel, list_set_sel, make_bold_font_from,
+    toggle_pin_at_row,
 };
 use crate::paste::activate_selected;
 use crate::search::{push_item, refresh_listbox, update_filter};
@@ -446,18 +446,12 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             LRESULT(brush.0 as isize)
         }
         WM_DRAWITEM => {
+            // The custom list control paints itself; the only owner-draw
+            // child left is the title-bar close button.
             let dis = lp.0 as *const DRAWITEMSTRUCT;
-            if !dis.is_null() {
-                if (*dis).CtlID == CLOSE_BTN_ID as u32 {
-                    draw_close_button(&*dis);
-                } else {
-                    draw_listbox_item(&*dis);
-                }
+            if !dis.is_null() && (*dis).CtlID == CLOSE_BTN_ID as u32 {
+                draw_close_button(&*dis);
             }
-            LRESULT(1)
-        }
-        WM_MEASUREITEM => {
-            measure_listbox_item(lp.0 as *mut MEASUREITEMSTRUCT);
             LRESULT(1)
         }
         WM_SIZE => {
@@ -743,7 +737,7 @@ unsafe fn handle_popup_key(popup: HWND, vk: u16) -> bool {
         if ctrl {
             let lb = LISTBOX.with(|l| *l.borrow());
             if !lb.0.is_null() {
-                let sel = SendMessageW(lb, LB_GETCURSEL, WPARAM(0), LPARAM(0)).0 as i32;
+                let sel = list_get_sel();
                 if sel >= 0 {
                     toggle_pin_at_row(lb, sel);
                 }
@@ -752,18 +746,15 @@ unsafe fn handle_popup_key(popup: HWND, vk: u16) -> bool {
         }
         false
     } else if vk == VK_UP.0 || vk == VK_DOWN.0 {
-        let lb = LISTBOX.with(|l| *l.borrow());
-        if !lb.0.is_null() {
-            let count = SendMessageW(lb, LB_GETCOUNT, WPARAM(0), LPARAM(0)).0 as i32;
-            if count > 0 {
-                let cur = SendMessageW(lb, LB_GETCURSEL, WPARAM(0), LPARAM(0)).0 as i32;
-                let next = if vk == VK_DOWN.0 {
-                    (cur + 1).min(count - 1)
-                } else {
-                    (cur - 1).max(0)
-                };
-                SendMessageW(lb, LB_SETCURSEL, WPARAM(next as usize), LPARAM(0));
-            }
+        let count = list_count();
+        if count > 0 {
+            let cur = list_get_sel();
+            let next = if vk == VK_DOWN.0 {
+                (cur + 1).min(count - 1)
+            } else {
+                (cur - 1).max(0)
+            };
+            list_set_sel(next);
         }
         true
     } else {
