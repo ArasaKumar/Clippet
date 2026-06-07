@@ -11,7 +11,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::*;
 use windows::Win32::UI::Shell::*;
 use windows::Win32::UI::WindowsAndMessaging::*;
 
-use crate::clipboard::{looks_like_png, png_to_dib};
+use crate::clipboard::{decode_dib_to_bgra, looks_like_png, png_to_dib};
 use crate::state::{
     ClipItem, ItemType, CF_DIB, CF_HDROP, CF_TEXT, CF_UNICODETEXT, FILTERED, HISTORY, LISTBOX,
     PREV_FG, REG, SUPPRESS_NEXT_UPDATE,
@@ -28,6 +28,9 @@ pub(crate) unsafe fn alloc_global(bytes: &[u8]) -> Option<HGLOBAL> {
     let hg = GlobalAlloc(GMEM_MOVEABLE, bytes.len()).ok()?;
     let p = GlobalLock(hg);
     if p.is_null() {
+        // Lock failed — free the block we just allocated so the
+        // GlobalAlloc/GlobalFree pair stays honored on this exit path.
+        let _ = GlobalFree(hg);
         return None;
     }
     std::ptr::copy_nonoverlapping(bytes.as_ptr(), p as *mut u8, bytes.len());
@@ -70,13 +73,20 @@ pub(crate) unsafe fn build_hdrop_blob(paths: &[&str]) -> Vec<u8> {
 
 /// Wrapper around SetClipboardData that returns Some on success.
 /// SetClipboardData takes ownership of the HGLOBAL on success; on
-/// failure we'd leak it — acceptable here because the failure path is
-/// rare and the process dies on it anyway.
+/// failure ownership stays with us, so we free the block to keep the
+/// GlobalAlloc/GlobalFree pair honored (the app keeps running after a
+/// failed paste, so a leak here would accumulate).
 ///
 /// SAFETY: caller must hold the clipboard open.
 unsafe fn set_data(format: u32, hg: HGLOBAL) -> Option<()> {
     let handle = HANDLE(hg.0);
-    SetClipboardData(format, handle).ok().map(|_| ())
+    match SetClipboardData(format, handle) {
+        Ok(_) => Some(()),
+        Err(_) => {
+            let _ = GlobalFree(hg);
+            None
+        }
+    }
 }
 
 /// Re-publish the item to the clipboard in its native format. Sets
@@ -121,8 +131,18 @@ pub(crate) unsafe fn set_clipboard_from_item(hwnd: HWND, item: &ClipItem) -> boo
                 Some(b) => {
                     let dib = if looks_like_png(&b) {
                         png_to_dib(&b)
-                    } else {
+                    } else if decode_dib_to_bgra(&b).is_some() {
+                        // Raw-DIB fallback from the capture path — only
+                        // republish it once we've confirmed it actually
+                        // parses, so a corrupt media file is never handed
+                        // to a consumer as CF_DIB.
                         Some(b)
+                    } else {
+                        debug_log(&format!(
+                            "Clippet: media for id={} is neither PNG nor a valid DIB — paste skipped",
+                            item.id
+                        ));
+                        None
                     };
                     dib.and_then(|d| alloc_global(&d))
                         .and_then(|hg| set_data(CF_DIB, hg))
@@ -148,9 +168,12 @@ pub(crate) unsafe fn set_clipboard_from_item(hwnd: HWND, item: &ClipItem) -> boo
         }
     };
 
-    if result.is_some() {
-        SUPPRESS_NEXT_UPDATE.with(|f| f.set(true));
-    }
+    // EmptyClipboard above already mutated the clipboard, so CloseClipboard
+    // will fire exactly one WM_CLIPBOARDUPDATE regardless of whether the
+    // payload was published. Suppress it unconditionally so our listener
+    // doesn't re-capture (a freshly-emptied clipboard on the failure path,
+    // or the item we just re-published on success).
+    SUPPRESS_NEXT_UPDATE.with(|f| f.set(true));
     let _ = CloseClipboard();
     result.is_some()
 }
@@ -193,7 +216,17 @@ pub(crate) unsafe fn send_paste() {
         time: 0,
         dwExtraInfo: 0,
     };
-    SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+    // Returns the number of events injected; anything less than the 4 we
+    // queued means the input was blocked (e.g. UIPI against an elevated
+    // foreground window) and the Ctrl+V won't land.
+    let injected = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
+    if injected != inputs.len() as u32 {
+        debug_log(&format!(
+            "Clippet: SendInput injected {}/{} events — paste keystroke may have been blocked",
+            injected,
+            inputs.len()
+        ));
+    }
 }
 
 /// Activate the currently-selected listbox row (paste it into the

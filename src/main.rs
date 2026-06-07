@@ -309,15 +309,17 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             LRESULT(0)
         }
         WM_GETMINMAXINFO => {
-            // Floor the resize to a usable size — below ~280x200 the
+            // Let DefWindowProc populate the default min/max bounds first,
+            // then raise only the minimum track size. Below ~280x200 the
             // row text starts colliding with the pin column and the
             // search box.
+            let res = DefWindowProcW(hwnd, msg, wp, lp);
             let info = lp.0 as *mut MINMAXINFO;
             if !info.is_null() {
                 (*info).ptMinTrackSize.x = POPUP_MIN_W;
                 (*info).ptMinTrackSize.y = POPUP_MIN_H;
             }
-            LRESULT(0)
+            res
         }
         WM_COMMAND => {
             // HIWORD(wParam) is the notification code (LBN_DBLCLK = 2
@@ -327,7 +329,7 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             let code = (wp.0 as u32 >> 16) & 0xFFFF;
             let id = (wp.0 as u32) & 0xFFFF;
             if code == 2 && id == LISTBOX_ID as u32 {
-                activate_selected(hwnd);
+                let _ = activate_selected(hwnd);
             } else if code == EN_CHANGE_CODE && id == EDIT_ID as u32 {
                 update_filter();
             } else if id == CLOSE_BTN_ID as u32 {
@@ -355,18 +357,19 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
             let y = ((lp.0 as u32 >> 16) & 0xFFFF) as i16 as i32;
             let mut rc = RECT::default();
             if GetClientRect(hwnd, &mut rc).is_ok() {
-                match footer::hit_test(rc.right, rc.bottom, x, y) {
-                    0 => {
+                use footer::FooterAction::*;
+                match footer::action_at(rc.right, rc.bottom, x, y) {
+                    Some(ThemeToggle) => {
                         // Toggle theme: flip the currently-displayed mode.
                         // apply_theme persists the choice and repaints.
                         let now_dark = IS_DARK.with(|c| c.get());
                         apply_theme(hwnd, now_dark);
                     }
-                    1 => clear_history(hwnd),
-                    2 => show_settings_stub(hwnd),
-                    3 => show_about(hwnd),
-                    4 => { let _ = DestroyWindow(hwnd); }
-                    _ => {}
+                    Some(ClearHistory) => clear_history(hwnd),
+                    Some(Settings) => show_settings_stub(hwnd),
+                    Some(About) => show_about(hwnd),
+                    Some(Quit) => { let _ = DestroyWindow(hwnd); }
+                    None => {}
                 }
             }
             LRESULT(0)
@@ -447,12 +450,16 @@ unsafe extern "system" fn wnd_proc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM)
         }
         WM_DRAWITEM => {
             // The custom list control paints itself; the only owner-draw
-            // child left is the title-bar close button.
+            // child left is the title-bar close button. Only claim the
+            // message as handled when we actually painted it — otherwise
+            // a future owner-draw child would be silently left blank.
             let dis = lp.0 as *const DRAWITEMSTRUCT;
             if !dis.is_null() && (*dis).CtlID == CLOSE_BTN_ID as u32 {
                 draw_close_button(&*dis);
+                LRESULT(1)
+            } else {
+                DefWindowProcW(hwnd, msg, wp, lp)
             }
-            LRESULT(1)
         }
         WM_SIZE => {
             let w = (lp.0 as u32 & 0xFFFF) as i32;
@@ -698,7 +705,7 @@ fn main() -> Result<()> {
                 }
             }
             let _ = TranslateMessage(&msg);
-            DispatchMessageW(&msg);
+            let _ = DispatchMessageW(&msg);
         }
     }
     Ok(())
@@ -715,7 +722,7 @@ unsafe fn handle_popup_key(popup: HWND, vk: u16) -> bool {
         let _ = ShowWindow(popup, SW_HIDE);
         true
     } else if vk == VK_RETURN.0 {
-        activate_selected(popup);
+        let _ = activate_selected(popup);
         true
     } else if vk == VK_TAB.0 {
         // Cycle focus between search box and listbox.
