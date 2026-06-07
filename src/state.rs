@@ -23,17 +23,6 @@ pub(crate) const CF_UNICODETEXT: u32 = 13;
 pub(crate) const CF_HDROP: u32 = 15;
 
 // ---------------------------------------------------------------------
-// Listbox styles are exposed as plain u32 constants in windows-rs and are
-// OR'd with the WINDOW_STYLE bits when creating the control.
-// ---------------------------------------------------------------------
-
-pub(crate) const LBS_NOTIFY_BIT: u32 = 0x0001;
-pub(crate) const LBS_HASSTRINGS_BIT: u32 = 0x0040;
-pub(crate) const LBS_NOINTEGRALHEIGHT_BIT: u32 = 0x0100;
-pub(crate) const LBS_WANTKEYBOARDINPUT_BIT: u32 = 0x0400;
-pub(crate) const LBS_OWNERDRAWVARIABLE_BIT: u32 = 0x0020;
-
-// ---------------------------------------------------------------------
 // Popup geometry and global hotkey id. POPUP_W/H are the *defaults* used
 // on first launch; the user-resized size is persisted in settings.json
 // (and held in POPUP_SIZE during the session).
@@ -90,7 +79,8 @@ pub(crate) const SEARCH_ICON_SIZE: i32 = 14;
 pub(crate) const SEARCH_ICON_RIGHT_GAP: i32 = 8;
 pub(crate) const SEARCH_EDIT_VERT_INSET: i32 = 6;
 pub(crate) const SEARCH_EDIT_RIGHT_PAD: i32 = 14;
-// DRAWITEMSTRUCT.itemState bits (DRAWITEMSTRUCT_FLAGS values).
+// DRAWITEMSTRUCT.itemState bits (DRAWITEMSTRUCT_FLAGS values). Still used
+// by the title-bar close button's owner-draw (pressed state).
 pub(crate) const ODS_SELECTED_BIT: u32 = 0x0001;
 
 pub(crate) const TEXT_ITEM_HEIGHT: u32 = 34;
@@ -134,7 +124,6 @@ pub(crate) const IDM_ROW_PASTE: u32 = 200;
 pub(crate) const IDM_ROW_PIN: u32 = 201;
 pub(crate) const IDM_ROW_COPY: u32 = 202;
 pub(crate) const IDM_ROW_DELETE: u32 = 203;
-pub(crate) const LISTBOX_SUBCLASS_ID: usize = 0xC1;
 
 // ---------------------------------------------------------------------
 // Storage cap.
