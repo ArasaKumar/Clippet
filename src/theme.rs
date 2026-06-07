@@ -1,9 +1,10 @@
 //! Theme detection (AppsUseLightTheme) + Win11 control styling
 //! (DwmSetWindowAttribute, SetWindowTheme on the listbox/edit).
 //!
-//! The palette is read once at startup; theme changes during a session
-//! don't auto-apply — the user would need to reopen Clippet, which is
-//! fine for the kind of app this is.
+//! The system palette is read at startup, but the theme is also live:
+//! `apply_theme` performs a full runtime swap (brushes, class brush, DWM
+//! attributes, child control theme, repaint) so the footer toggle takes
+//! effect immediately without relaunching.
 
 use windows::core::*;
 use windows::Win32::Foundation::*;

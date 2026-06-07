@@ -1021,18 +1021,23 @@ unsafe fn paint(hwnd: HWND) {
 
     let scroll = scroll_y();
     let selected = sel();
-    let tops = LIST_ROW_TOPS.with(|c| c.borrow().clone());
-    if tops.len() >= 2 {
-        for i in 0..tops.len() - 1 {
-            let top = tops[i] - scroll;
-            let bottom = tops[i + 1] - scroll;
-            if bottom <= 0 || top >= ch {
-                continue;
+    // Borrow (don't clone) the row tops for the frame: draw_row never
+    // touches LIST_ROW_TOPS, and a shared borrow held across the loop is
+    // sound — this avoids a Vec allocation on every WM_PAINT.
+    LIST_ROW_TOPS.with(|c| {
+        let tops = c.borrow();
+        if tops.len() >= 2 {
+            for i in 0..tops.len() - 1 {
+                let top = tops[i] - scroll;
+                let bottom = tops[i + 1] - scroll;
+                if bottom <= 0 || top >= ch {
+                    continue;
+                }
+                let rc = RECT { left: 0, top, right: cw, bottom };
+                draw_row(mem, hwnd, i, &rc, i as i32 == selected);
             }
-            let rc = RECT { left: 0, top, right: cw, bottom };
-            draw_row(mem, hwnd, i, &rc, i as i32 == selected);
         }
-    }
+    });
 
     let _ = BitBlt(hdc, 0, 0, cw, ch, mem, 0, 0, SRCCOPY);
     let _ = SelectObject(mem, prev);

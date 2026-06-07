@@ -22,12 +22,36 @@ use windows::Win32::UI::WindowsAndMessaging::*;
 
 use crate::state::{
     BG_BRUSH, FOOTER_BTN_H, FOOTER_BTN_W, FOOTER_HEIGHT, FOOTER_HOT_ITEM, FOOTER_ICON_SIZE,
-    FOOTER_PAD_X, IS_DARK, PALETTE, Palette, SEL_BRUSH, TOOLTIP_BASE_ID, TOOLTIP_HWND,
+    FOOTER_PAD_X, IS_DARK, PALETTE, Palette, RESIZE_MARGIN, SEL_BRUSH, TOOLTIP_BASE_ID,
+    TOOLTIP_HWND,
 };
 
-// Indices match the WM_LBUTTONDOWN dispatch arms in main.rs:
-// 0 = Theme Toggle, 1 = Clear History, 2 = Settings, 3 = About, 4 = Quit.
 pub(crate) const ITEM_COUNT: i32 = 5;
+
+/// A footer button's semantic action. The index→action mapping lives
+/// here, next to the index→icon (`icon_color`/`paint`) and index→tooltip
+/// tables, so a button reorder only has to be made in one file. `main.rs`
+/// dispatches on the enum rather than on a raw 0..4 index.
+#[derive(Clone, Copy)]
+pub(crate) enum FooterAction {
+    ThemeToggle,
+    ClearHistory,
+    Settings,
+    About,
+    Quit,
+}
+
+/// Resolve a client-space click to the footer action under it, if any.
+pub(crate) fn action_at(client_w: i32, client_h: i32, x: i32, y: i32) -> Option<FooterAction> {
+    match hit_test(client_w, client_h, x, y) {
+        0 => Some(FooterAction::ThemeToggle),
+        1 => Some(FooterAction::ClearHistory),
+        2 => Some(FooterAction::Settings),
+        3 => Some(FooterAction::About),
+        4 => Some(FooterAction::Quit),
+        _ => None,
+    }
+}
 
 /// X coordinate of the leftmost button (button index 0 = Clear History).
 fn buttons_left(client_w: i32) -> i32 {
@@ -117,8 +141,8 @@ pub(crate) unsafe fn paint(hwnd: HWND, hdc: HDC) {
         }
         let cx = btn_x + FOOTER_BTN_W / 2;
         // Center icons in the upper portion of the button so they stay
-        // clear of the 6-px bottom resize edge that overlaps the row.
-        let usable_h = FOOTER_BTN_H - 6;
+        // clear of the bottom resize edge that overlaps the row.
+        let usable_h = FOOTER_BTN_H - RESIZE_MARGIN;
         let cy = btn_top + (usable_h - FOOTER_ICON_SIZE) / 2 + FOOTER_ICON_SIZE / 2;
         let color = icon_color(i, &pal);
         match i {
@@ -141,15 +165,15 @@ pub(crate) unsafe fn paint(hwnd: HWND, hdc: HDC) {
     }
 }
 
-/// Trim the highlight to the area above the bottom 6-px resize zone so
-/// the hover fill doesn't bleed into a region that won't actually
-/// respond to clicks (WM_NCHITTEST returns HTBOTTOM there).
+/// Trim the highlight to the area above the bottom resize zone so the
+/// hover fill doesn't bleed into a region that won't actually respond to
+/// clicks (WM_NCHITTEST returns HTBOTTOM there).
 fn sel_rect_above_resize(btn: &RECT) -> RECT {
     RECT {
         left: btn.left,
         top: btn.top,
         right: btn.right,
-        bottom: btn.bottom - 6,
+        bottom: btn.bottom - RESIZE_MARGIN,
     }
 }
 
@@ -472,7 +496,7 @@ pub(crate) unsafe fn update_tooltip_rects(parent: HWND, client_w: i32, client_h:
             right: btn_x + FOOTER_BTN_W,
             // Trim to the same area we accept clicks in; the resize edge
             // shouldn't be marketed as a button.
-            bottom: btn_top + FOOTER_BTN_H - 6,
+            bottom: btn_top + FOOTER_BTN_H - RESIZE_MARGIN,
         };
         SendMessageW(
             tt,

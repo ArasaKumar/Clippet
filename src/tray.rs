@@ -289,10 +289,14 @@ pub(crate) unsafe fn show_about(hwnd: HWND) {
     show_msgbox(
         hwnd,
         "About Clippet",
-        "Clippet v0.1.0\n\n\
-         Native Windows 11 clipboard manager.\n\
-         Built with Rust + windows-rs.\n\n\
-         Global hotkey: Ctrl+Shift+V",
+        concat!(
+            "Clippet v",
+            env!("CARGO_PKG_VERSION"),
+            "\n\n\
+             Native Windows 11 clipboard manager.\n\
+             Built with Rust + windows-rs.\n\n\
+             Global hotkey: Ctrl+Shift+V"
+        ),
         MB_OK | MB_ICONINFORMATION,
     );
 }
@@ -319,11 +323,17 @@ pub(crate) unsafe fn maybe_prompt_autostart(hwnd: HWND) {
     );
     s.autostart_prompted = true;
     if r == IDYES {
-        if let Some(exe) = current_exe_quoted() {
-            if registry_run_set(&exe).is_ok() {
+        match current_exe_quoted() {
+            Some(exe) if registry_run_set(&exe).is_ok() => {
                 s.autostart_enabled = true;
-            } else {
+            }
+            Some(_) => {
                 crate::util::debug_log("Clippet: failed to write autostart registry value");
+            }
+            None => {
+                crate::util::debug_log(
+                    "Clippet: autostart requested but exe path unavailable — skipped",
+                );
             }
         }
     }

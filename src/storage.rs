@@ -20,7 +20,6 @@ use base64::Engine;
 use serde::{Deserialize, Serialize};
 
 use windows::core::*;
-use windows::Win32::Foundation::*;
 use windows::Win32::System::Registry::*;
 
 use crate::state::{ClipItem, ItemType, MAX_ITEMS, STORAGE_VERSION};
@@ -370,7 +369,18 @@ pub(crate) fn load_settings() -> Settings {
         Ok(b) => b,
         Err(_) => return Settings::default(),
     };
-    serde_json::from_slice(&bytes).unwrap_or_default()
+    match serde_json::from_slice(&bytes) {
+        Ok(s) => s,
+        Err(e) => {
+            // Don't silently reset the user's popup size / theme override
+            // on a parse error — log it like load_history does.
+            debug_log(&format!(
+                "Clippet: settings.json parse failed ({}) — using defaults",
+                e
+            ));
+            Settings::default()
+        }
+    }
 }
 
 pub(crate) fn save_settings(s: &Settings) {
@@ -439,31 +449,6 @@ pub(crate) unsafe fn registry_run_set(value: &str) -> windows::core::Result<()> 
         Some(value_bytes),
     );
     let _ = RegCloseKey(hkey);
-    r.ok()
-}
-
-/// Remove the autostart registry value. An already-absent value is
-/// treated as success — that's the desired end state.
-///
-/// SAFETY: Same Win32 contract as `registry_run_set`.
-#[allow(dead_code)]
-pub(crate) unsafe fn registry_run_remove() -> windows::core::Result<()> {
-    let key_name = to_wide(RUN_KEY);
-    let mut hkey: HKEY = HKEY::default();
-    RegOpenKeyExW(
-        HKEY_CURRENT_USER,
-        PCWSTR(key_name.as_ptr()),
-        0,
-        KEY_SET_VALUE,
-        &mut hkey,
-    )
-    .ok()?;
-    let value_name = to_wide(RUN_VALUE_NAME);
-    let r = RegDeleteValueW(hkey, PCWSTR(value_name.as_ptr()));
-    let _ = RegCloseKey(hkey);
-    if r == ERROR_FILE_NOT_FOUND {
-        return Ok(());
-    }
     r.ok()
 }
 
